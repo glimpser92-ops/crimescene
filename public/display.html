@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>과학실의 소동 — 공유 스크린</title>
+  <link rel="stylesheet" href="/css/theme.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #020208;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100vw;
+      height: 100vh;
+      color: var(--text);
+    }
+
+    /* 16:9 프레젠테이션 컨테이너 (1920x1080 기준 고정 배율 축소/확대) */
+    #display-container {
+      width: 1920px;
+      height: 1080px;
+      background: var(--bg);
+      position: relative;
+      flex-shrink: 0;
+      overflow: hidden;
+      box-shadow: 0 0 50px rgba(0, 0, 0, 0.8);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .display-screen {
+      display: none;
+      width: 100%;
+      height: 100%;
+      position: relative;
+      padding: 100px 80px 50px; /* 상단 고정 상태 바와 겹치지 않도록 여백 확보 */
+      box-sizing: border-box;
+    }
+
+    .display-screen.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 상단 상태 바 */
+    .top-status {
+      position: absolute;
+      top: 30px;
+      left: 80px;
+      right: 80px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+      border-bottom: 1px solid var(--line-dim);
+      padding-bottom: 15px;
+    }
+
+    .top-status .title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text-dim);
+    }
+
+    .top-status .room-code-tag {
+      font-size: 1.4rem;
+      background: rgba(40, 224, 255, 0.1);
+      border: 1px solid var(--cyan);
+      padding: 4px 16px;
+      border-radius: 8px;
+      color: var(--cyan);
+      font-family: 'Black Han Sans', sans-serif;
+    }
+
+    .top-status .phase-tag {
+      font-size: 1.5rem;
+      font-weight: 900;
+      color: var(--purple);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .top-status .timer {
+      font-size: 2.2rem;
+      font-weight: 700;
+    }
+
+    /* 대기실 (Lobby) */
+    .lobby-wrapper {
+      background:
+        linear-gradient(rgba(4, 5, 14, 0.95), rgba(4, 5, 14, 0.97)),
+        url('/images/board.png') no-repeat center/cover;
+      display: flex;
+      height: 100%;
+      align-items: center;
+      justify-content: space-between;
+      gap: 50px;
+      padding: 100px 40px 40px;
+      width: 100%;
+    }
+
+    .lobby-info {
+      flex: 1;
+      max-width: 600px;
+    }
+
+    .lobby-info h1 {
+      font-size: 4rem;
+      line-height: 1.2;
+      margin-bottom: 20px;
+    }
+
+    .lobby-info .code-display {
+      font-size: 7rem;
+      font-family: 'Black Han Sans', sans-serif;
+      color: var(--cyan);
+      text-shadow: var(--glow-c);
+      letter-spacing: 0.1em;
+      margin: 20px 0;
+    }
+
+    .lobby-info p {
+      font-size: 1.4rem;
+      color: var(--text-dim);
+      line-height: 1.8;
+    }
+
+    .lobby-players-box {
+      flex: 1.2;
+      height: 80%;
+      background: rgba(10, 12, 35, 0.85);
+      border: 2px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--glow-c);
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .lobby-players-box h2 {
+      font-size: 2rem;
+      margin-bottom: 25px;
+      border-bottom: 1px solid var(--line-dim);
+      padding-bottom: 15px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .lobby-players-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-auto-rows: min-content;
+      align-content: start;
+      gap: 15px;
+      overflow-y: auto;
+      flex-grow: 1;
+      padding-right: 10px;
+    }
+
+    .lobby-player-card {
+      background: var(--panel-2);
+      border: 1px solid var(--line-dim);
+      border-radius: 10px;
+      padding: 15px;
+      text-align: center;
+      font-size: 1.2rem;
+      font-weight: 700;
+      transition: all 0.3s;
+    }
+
+    .lobby-player-card.connected {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      box-shadow: 0 0 10px rgba(40, 224, 255, 0.2);
+    }
+
+    .lobby-player-card.disconnected {
+      opacity: 0.4;
+    }
+
+    .lobby-player-card.bot {
+      border-color: rgba(180, 76, 255, 0.62);
+      color: #dca8ff;
+      background: rgba(180, 76, 255, 0.11);
+      box-shadow: 0 0 12px rgba(180, 76, 255, 0.24), inset 0 0 18px rgba(180, 76, 255, 0.12);
+    }
+
+    /* 슬라이드 템플릿 */
+    .slide-layout {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      justify-content: center;
+      padding-top: 50px;
+    }
+
+    .slide-header {
+      margin-bottom: 40px;
+      border-bottom: 2px solid var(--line-dim);
+      padding-bottom: 20px;
+      position: relative;
+    }
+
+    .slide-header .slide-number {
+      position: absolute;
+      left: -50px;
+      top: -10px;
+      font-size: 3rem;
+      font-family: 'Black Han Sans', sans-serif;
+      opacity: 0.15;
+    }
+
+    .slide-header h2 {
+      font-size: 3.5rem;
+      font-family: 'Black Han Sans', sans-serif;
+    }
+
+    /* 알리바이 타임라인 (Photo 1 톤 재현) */
+    .timeline-container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      margin-top: 20px;
+      background: rgba(10, 12, 30, 0.6);
+      padding: 40px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line-dim);
+      position: relative;
+    }
+
+    .timeline-grid {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .timeline-row {
+      display: flex;
+      align-items: center;
+      height: 80px;
+    }
+
+    .timeline-label {
+      width: 200px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      font-size: 1.4rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .timeline-avatar {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+      border: 2px solid var(--line);
+    }
+
+    .timeline-track {
+      flex-grow: 1;
+      height: 60px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      position: relative;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .timeline-bar {
+      position: absolute;
+      height: 44px;
+      top: 7px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.25rem;
+      color: #fff;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.4);
+    }
+
+    .timeline-time-labels {
+      display: flex;
+      justify-content: space-between;
+      padding-left: 200px;
+      font-size: 1.15rem;
+      color: var(--text-dim);
+      font-family: monospace;
+    }
+
+    .timeline-time-col {
+      width: 0;
+      position: relative;
+      display: flex;
+      justify-content: center;
+    }
+
+    .timeline-grid-lines {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 200px;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .timeline-grid-line {
+      width: 1px;
+      background: rgba(255, 255, 255, 0.04);
+      height: 100%;
+    }
+
+    .timeline-incident-line {
+      position: absolute;
+      top: -20px;
+      bottom: -10px;
+      width: 3px;
+      background: var(--red);
+      box-shadow: 0 0 12px var(--red);
+      z-index: 5;
+    }
+
+    .timeline-incident-tag {
+      position: absolute;
+      top: -55px;
+      transform: translateX(-50%);
+      background: var(--red);
+      color: #fff;
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    /* 조사 규칙 안내 (Photo 3 톤 재현) */
+    .rules-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 30px;
+      margin-top: 30px;
+    }
+
+    .rules-card {
+      background: rgba(15, 20, 45, 0.7);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 40px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 25px;
+      box-shadow: var(--glow-c);
+    }
+
+    .rules-card .icon-box {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: rgba(40, 224, 255, 0.07);
+      border: 2px solid var(--cyan);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3.5rem;
+      box-shadow: var(--glow-c);
+    }
+
+    .rules-card h3 {
+      font-size: 1.8rem;
+      color: var(--cyan);
+    }
+
+    .rules-card p {
+      font-size: 1.35rem;
+      line-height: 1.8;
+      color: var(--text-dim);
+    }
+
+    /* 조사 허브 (Investigation Hub) */
+    .investigation-wrapper {
+      background:
+        linear-gradient(rgba(4, 5, 14, 0.95), rgba(4, 5, 14, 0.97)),
+        url('/images/board.png') no-repeat center/cover;
+      height: 100%;
+      width: 100%;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      padding: 40px 80px;
+    }
+
+    .investigation-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 25px;
+      flex-grow: 1;
+      margin-top: 20px;
+    }
+
+    .investigation-card {
+      background: rgba(10, 12, 35, 0.85);
+      border: 2px solid var(--line-dim);
+      border-radius: var(--radius);
+      padding: 25px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .investigation-card.active {
+      border-color: var(--cyan);
+      box-shadow: var(--glow-c);
+    }
+
+    .investigation-card .icon {
+      font-size: 3.8rem;
+    }
+
+    .investigation-card h3 {
+      font-size: 1.8rem;
+    }
+
+    /* 조사 구역 상세 보기 */
+    .zone-detail-wrapper {
+      display: flex;
+      gap: 50px;
+      height: 100%;
+      padding-bottom: 40px;
+    }
+
+    .zone-visual-panel {
+      flex: 1.3;
+      background: var(--panel-2);
+      border: 2px solid var(--line);
+      border-radius: var(--radius);
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--glow-c);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .zone-visual-image {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .zone-clues-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow-y: auto;
+    }
+
+    .zone-clue-item {
+      background: rgba(15, 20, 45, 0.7);
+      border: 1px solid var(--line-dim);
+      border-radius: var(--radius);
+      padding: 22px;
+      transition: all 0.3s;
+    }
+
+    .zone-clue-item.evidence-list-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 18px;
+    }
+
+    .zone-clue-copy {
+      flex: 1;
+    }
+
+    .zone-clue-item .evidence-photo--mini {
+      width: 156px;
+      flex-basis: 156px;
+      box-shadow: 0 0 18px rgba(40, 224, 255, 0.16);
+    }
+
+    .zone-clue-item h4 {
+      font-size: 1.5rem;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .zone-clue-item p {
+      font-size: 1.15rem;
+      line-height: 1.7;
+      color: var(--text-dim);
+    }
+
+    /* 용의자 심문 (Questioning) */
+    .questioning-wrapper {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 25px;
+      height: 100%;
+      padding-top: 50px;
+    }
+
+    .suspect-profile-card {
+      background: var(--panel);
+      border: 2px solid var(--line-dim);
+      border-radius: var(--radius);
+      padding: 30px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      transition: all 0.3s;
+      position: relative;
+    }
+
+    .suspect-profile-card.spotlight {
+      border-color: var(--cyan);
+      box-shadow: var(--glow-c);
+      transform: scale(1.05);
+      z-index: 10;
+    }
+
+    .suspect-profile-card .avatar {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      border: 4px solid var(--line-dim);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 5rem;
+      background: rgba(255, 255, 255, 0.02);
+      transition: all 0.3s;
+    }
+
+    .suspect-profile-card.spotlight .avatar {
+      border-color: var(--cyan);
+      box-shadow: var(--glow-c);
+      background: rgba(40, 224, 255, 0.08);
+    }
+
+    .suspect-profile-card h3 {
+      font-size: 2.2rem;
+    }
+
+    .suspect-profile-card .role {
+      font-size: 1.3rem;
+      color: var(--text-dim);
+    }
+
+    .suspect-profile-card .alibi-bubble {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 12px;
+      padding: 20px;
+      font-size: 1.15rem;
+      line-height: 1.75;
+      text-align: center;
+      flex-grow: 1;
+      width: 100%;
+    }
+
+    .suspect-profile-card.spotlight .alibi-bubble {
+      background: rgba(40, 224, 255, 0.04);
+      border: 1px solid var(--line-dim);
+    }
+
+    .spotlight-indicator {
+      position: absolute;
+      top: 20px;
+      background: var(--cyan);
+      color: #000;
+      font-weight: 900;
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      text-transform: uppercase;
+      box-shadow: var(--glow-c);
+      display: none;
+    }
+
+    .suspect-profile-card.spotlight .spotlight-indicator {
+      display: block;
+    }
+
+    /* 투표 결과 / 진상 공개 (Reveal) */
+    .reveal-card {
+      background: var(--panel);
+      border: 2px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--glow-c);
+      padding: 50px;
+      max-width: 1200px;
+      margin: 40px auto 0;
+      width: 100%;
+    }
+
+    .reveal-card.culprit-reveal {
+      border-color: var(--red);
+      box-shadow: 0 0 30px rgba(255, 59, 92, 0.4);
+      text-align: center;
+    }
+
+    .vote-chart-container {
+      display: flex;
+      flex-direction: column;
+      gap: 25px;
+      margin-top: 40px;
+    }
+
+    .vote-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 25px;
+    }
+
+    .vote-bar-label {
+      width: 180px;
+      font-size: 1.6rem;
+      font-weight: 700;
+      text-align: right;
+    }
+
+    .vote-bar-track {
+      flex-grow: 1;
+      height: 45px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      position: relative;
+    }
+
+    .vote-bar-fill {
+      height: 100%;
+      background: var(--cyan);
+      border-radius: 8px;
+      transition: width 1s ease-out;
+      box-shadow: var(--glow-c);
+    }
+
+    .vote-bar-count {
+      width: 80px;
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--cyan);
+    }
+
+    /* 브리핑 슬라이드 전용 */
+    .briefing-slide {
+      display: none;
+      height: 100%;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .briefing-slide.active {
+      display: flex;
+    }
+
+    .split-layout {
+      display: flex;
+      gap: 60px;
+      align-items: center;
+      height: 100%;
+    }
+
+    .split-left {
+      flex: 1;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .split-right {
+      flex: 1.2;
+      display: flex;
+      flex-direction: column;
+      gap: 25px;
+    }
+
+    .briefing-cover-wrapper {
+      background:
+        linear-gradient(rgba(4, 5, 14, 0.45) 0%, rgba(4, 5, 14, 0.75) 70%, rgba(4, 5, 14, 0.9) 100%),
+        url('/images/cover.png') no-repeat center/cover;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .briefing-cover-wrapper h1 {
+      font-size: 6.5rem;
+      line-height: 1.15;
+      margin-bottom: 20px;
+    }
+
+    .briefing-cover-wrapper p {
+      font-size: 2rem;
+      color: var(--text-dim);
+    }
+
+    .bullet-list {
+      font-size: 1.4rem;
+      line-height: 1.8;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .bullet-list li {
+      position: relative;
+      padding-left: 30px;
+      list-style: none;
+    }
+
+    .bullet-list li::before {
+      content: '●';
+      position: absolute;
+      left: 0;
+      color: var(--cyan);
+      text-shadow: var(--glow-c);
+    }
+
+    .img-frame {
+      border: 3px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--glow-c);
+      overflow: hidden;
+      width: 100%;
+      height: 80%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #020208;
+    }
+
+    .img-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .profile-avatar-container {
+      width: 100%;
+      height: 80%;
+      border: 3px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--glow-c);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10,12,35,0.7);
+    }
+
+    .profile-avatar-container .big-emoji {
+      font-size: 10rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="display-container">
+    <!-- 상단 고정 상태 바 -->
+    <div class="top-status" id="top-status-bar" style="display: none;">
+      <div class="title" id="bar-game-title">과학실의 소동</div>
+      <div class="row" style="gap: 30px;">
+        <span class="phase-tag" id="bar-phase-name">—</span>
+        <span class="room-code-tag" id="bar-room-code">----</span>
+        <span class="timer-display" id="bar-timer"></span>
+      </div>
+    </div>
+
+    <!-- 1) 대기실 (Lobby) -->
+    <div class="display-screen" id="scr-lobby">
+      <div class="lobby-wrapper">
+        <div class="lobby-info">
+          <div class="label-chip">🕵️ 멀티플레이어 수사망</div>
+          <h1 class="neon-title" style="font-size: 5rem;">과학실의 소동</h1>
+          <p>모바일 브라우저를 열고 화면에 보이는 방 코드를 입력하여 수사대로 입장해 주십시오.</p>
+          <div class="code-display" id="lobby-code-val">----</div>
+          <p style="font-size: 1.6rem;">📱 접속 주소: <b class="cyan" id="lobby-host-url"></b></p>
+          <p>주최자가 게임 시작을 승인하면 탐정 및 용의자 역할이 무작위로 배정됩니다.</p>
+        </div>
+        <div class="lobby-players-box">
+          <h2>접속자 명단 <span class="dim" style="font-size: 1.4rem;"><span id="lobby-joined-count">0</span> / 20명</span></h2>
+          <div class="lobby-players-grid" id="lobby-players-list">
+            <!-- 동적으로 플레이어 태그 렌더링 -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2) 브리핑 단계 (Briefing) -->
+    <div class="display-screen" id="scr-briefing">
+      <!-- 동적 슬라이드 쇼 렌더러 -->
+      <div class="slide-layout" id="briefing-slide-content"></div>
+    </div>
+
+    <!-- 3) 역할 비공개 확인 (Roles) -->
+    <div class="display-screen" id="scr-roles">
+      <div class="slide-layout" style="align-items: center; justify-content: center; text-align: center;">
+        <div class="label-chip" style="margin-bottom: 25px;">SECRET INFORMATION</div>
+        <h1 class="neon-title" style="font-size: 4.5rem; line-height: 1.3;">개인 역할 확인 단계</h1>
+        <p style="font-size: 1.8rem; max-width: 900px; margin-top: 30px; line-height: 1.8;" class="dim">
+          모든 참가자는 자신의 스마트폰 화면을 확인해 주십시오.<br/>
+          당신이 **용의자(범인 또는 선량한 용의자)**인지 **형사**인지 알 수 있는 보안 파일이 전송되었습니다.<br/>
+          <span class="red-t" style="font-weight: 700;">비공개 정보이므로 자신의 휴대폰 화면을 남에게 보여주거나 알려주지 않도록 조심하세요!</span>
+        </p>
+      </div>
+    </div>
+
+    <!-- 4) 조사 단계 (Investigation) -->
+    <div class="display-screen" id="scr-investigation" style="padding: 0;">
+      <!-- 허브 뷰 -->
+      <div id="invest-hub-view" class="investigation-wrapper">
+        <div class="top-status" style="position: static; margin-bottom: 20px; padding-bottom: 10px; width: 100%;">
+          <div class="title" style="font-size: 1.8rem;">🧪 조사 구역 허브</div>
+          <div class="row" style="gap: 30px;">
+            <span class="phase-tag">단서 탐색 중</span>
+            <span class="timer-display" id="invest-hub-timer"></span>
+          </div>
+        </div>
+        <p style="font-size: 1.3rem; margin-top:-10px" class="dim">진행자가 지목한 구역의 상세 정보를 실시간으로 공유합니다. 형사들은 자신의 스마트폰 비밀 단서와 매칭해 보세요.</p>
+        <div class="investigation-grid" id="invest-hub-grid">
+          <!-- 8구역 버튼 카드 동적 생성 -->
+        </div>
+      </div>
+
+      <!-- 지역 상세 뷰 -->
+      <div id="invest-zone-view" class="display-screen" style="display: none; padding: 40px 80px 30px; width: 100%;">
+        <div class="slide-header" style="margin-bottom: 20px; padding-bottom: 10px;">
+          <h2 id="zone-detail-title">—</h2>
+        </div>
+        <div class="zone-detail-wrapper">
+          <div class="zone-visual-panel" id="zone-visual-box">
+            <!-- 돋보기 및 이미지 렌더링 -->
+          </div>
+          <div class="zone-clues-panel" id="zone-clues-list">
+            <!-- 단서 리스트 3개 렌더링 -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5) 용의자 심문 (Questioning) -->
+    <div class="display-screen" id="scr-questioning">
+      <div class="slide-header">
+        <h2>용의자 공동 심문</h2>
+      </div>
+      <div class="questioning-wrapper" id="questioning-suspects-list">
+        <!-- 4명 용의자 정보 및 스포트라이트 상태 동적 렌더링 -->
+      </div>
+    </div>
+
+    <!-- 6) 최종 토론 (Final) -->
+    <div class="display-screen" id="scr-final">
+      <div class="slide-layout" style="align-items: center; justify-content: center; text-align: center;">
+        <div class="label-chip" style="margin-bottom: 20px;">LAST DISCUSSION</div>
+        <h1 class="neon-title" style="font-size: 5rem;">최종 추리 및 토론</h1>
+        <p style="font-size: 1.7rem; margin-top: 25px; line-height: 1.8;" class="dim">
+          투표 시작 전, 마지막으로 서로의 증거를 맞추며 범인을 추려내십시오.<br/>
+          범인(나범인)은 혐의를 피하기 위해 격렬하게 변명하거나 알리바이를 주장할 것입니다.
+        </p>
+        <div class="timer-display" id="final-large-timer" style="font-size: 7rem; margin-top: 40px;">00:00</div>
+      </div>
+    </div>
+
+    <!-- 7) 범인 투표 (Vote) -->
+    <div class="display-screen" id="scr-vote">
+      <div class="slide-layout">
+        <div class="slide-header">
+          <h2>범인 지목 투표 진행 중</h2>
+        </div>
+        <div class="split-layout">
+          <div class="split-left" style="flex: 1;">
+            <div class="panel frame" style="padding: 40px; text-align: center; width: 100%;">
+              <div style="font-size: 5rem;">🗳️</div>
+              <h3 style="font-size: 2.2rem; margin: 15px 0;">투표율 <span id="vote-progress-text">0 / 0</span></h3>
+              <div class="vote-bar-track" style="margin-top: 20px; height: 30px;">
+                <div class="vote-bar-fill" id="vote-progress-bar" style="width: 0%;"></div>
+              </div>
+              <p style="font-size: 1.25rem; margin-top: 25px;" class="dim">모바일 화면에 나타난 투표 용지를 통해 진짜 범인이라고 생각되는 인물을 한 명만 선택해 주십시오.</p>
+            </div>
+          </div>
+          <div class="split-right" style="flex: 1.2;">
+            <div class="panel purple frame" style="padding: 40px; height: 100%;">
+              <h3 style="font-size: 1.7rem; margin-bottom: 20px; border-bottom: 1px solid var(--line-dim); padding-bottom: 10px;">참가자 투표 완료 현황</h3>
+              <div class="lobby-players-grid" id="vote-players-status" style="grid-template-columns: repeat(3, 1fr);">
+                <!-- 플레이어 리스트 및 투표 완료 체크 표시 -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 8) 진상 공개 (Reveal) -->
+    <div class="display-screen" id="scr-reveal">
+      <div class="slide-layout">
+        <div class="slide-header">
+          <h2 id="reveal-title">사건의 진상</h2>
+        </div>
+        <div id="reveal-content-container">
+          <!-- 동적 revealStep에 맞춰 렌더링 -->
+        </div>
+      </div>
+    </div>
+
+    <!-- 9) 사건 종결 (End) -->
+    <div class="display-screen" id="scr-end">
+      <div class="slide-layout" style="align-items: center; justify-content: center; text-align: center;">
+        <div class="label-chip" style="margin-bottom: 25px; border-color: var(--green); background: rgba(60,255,158,0.1); color: #c2ffd9;">MISSION ACCOMPLISHED</div>
+        <h1 class="neon-title" style="font-size: 6rem; background: linear-gradient(100deg, var(--green) 10%, #7dffb4 50%, var(--cyan) 90%);">CASE CLOSED</h1>
+        <p style="font-size: 2rem; margin-top: 30px;" class="yellow-t">🕵️ 모든 탐정님들의 빛나는 추리로 설계도를 무사히 회수하고 로봇을 재조립했습니다!</p>
+        <p style="font-size: 1.4rem; max-width: 800px; margin-top: 20px; line-height: 1.8;" class="dim">
+          훌륭한 팀플레이와 예리한 지적 능력을 선보여 주셔서 대단히 감사합니다.<br/>
+          이것으로 "과학실의 소동" 사건 조사를 최종 종료합니다.
+        </p>
+        <div style="font-size: 7rem; margin-top: 35px;">🏅</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/clueVisuals.js"></script>
+  <script src="/js/display.js"></script>
+</body>
+</html>
