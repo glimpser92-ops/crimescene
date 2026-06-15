@@ -1,0 +1,554 @@
+/* =====================================================================
+   과학실의 소동 — 네온 다크 테마 (슬라이드 디자인 톤 재현)
+   ===================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
+
+:root {
+  --bg: #060611;
+  --bg-2: #0b0b1d;
+  --panel: rgba(13, 16, 38, 0.82);
+  --panel-2: rgba(20, 24, 54, 0.7);
+  --line: rgba(40, 224, 255, 0.35);
+  --line-dim: rgba(40, 224, 255, 0.14);
+  --cyan: #28e0ff;
+  --purple: #b44cff;
+  --magenta: #ff4cd8;
+  --red: #ff3b5c;
+  --yellow: #ffd23c;
+  --green: #3cff9e;
+  --orange: #ff8a3c;
+  --text: #e8ecff;
+  --text-dim: #8b93c4;
+  --glow-c: 0 0 8px rgba(40, 224, 255, 0.8), 0 0 24px rgba(40, 224, 255, 0.4);
+  --glow-p: 0 0 8px rgba(180, 76, 255, 0.8), 0 0 24px rgba(180, 76, 255, 0.4);
+  --radius: 14px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans KR', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 배경: 어두운 그리드 + 비네트 */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: -2;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% -10%, rgba(180, 76, 255, 0.12), transparent),
+    radial-gradient(ellipse 60% 45% at 85% 110%, rgba(40, 224, 255, 0.10), transparent),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+}
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(40, 224, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(40, 224, 255, 0.04) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 90% 80% at 50% 40%, black 30%, transparent 100%);
+}
+
+/* ----- 타이포그래피 ----- */
+.display-font { font-family: 'Black Han Sans', 'Noto Sans KR', sans-serif; font-weight: 400; }
+
+.neon-title {
+  font-family: 'Black Han Sans', sans-serif;
+  background: linear-gradient(100deg, var(--cyan) 10%, #7da7ff 45%, var(--purple) 90%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 14px rgba(90, 140, 255, 0.55));
+  letter-spacing: 0.02em;
+}
+
+.label-chip {
+  display: inline-block;
+  padding: 4px 14px;
+  border: 1px solid var(--purple);
+  border-radius: 8px;
+  color: #e9c8ff;
+  background: rgba(180, 76, 255, 0.12);
+  box-shadow: inset 0 0 12px rgba(180, 76, 255, 0.25), 0 0 10px rgba(180, 76, 255, 0.35);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+}
+
+/* ----- 패널 ----- */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: inset 0 0 30px rgba(40, 224, 255, 0.05), 0 0 18px rgba(40, 224, 255, 0.12);
+  backdrop-filter: blur(8px);
+}
+.panel.purple {
+  border-color: rgba(180, 76, 255, 0.45);
+  box-shadow: inset 0 0 30px rgba(180, 76, 255, 0.06), 0 0 18px rgba(180, 76, 255, 0.15);
+}
+.panel.red {
+  border-color: rgba(255, 59, 92, 0.5);
+  box-shadow: inset 0 0 30px rgba(255, 59, 92, 0.07), 0 0 18px rgba(255, 59, 92, 0.18);
+}
+
+/* 모서리 장식 (네온 프레임 느낌) */
+.frame { position: relative; }
+.frame::before, .frame::after {
+  content: ''; position: absolute; width: 22px; height: 22px; pointer-events: none;
+}
+.frame::before {
+  top: -2px; left: -2px;
+  border-top: 2px solid var(--cyan); border-left: 2px solid var(--cyan);
+  border-top-left-radius: var(--radius);
+  filter: drop-shadow(0 0 6px var(--cyan));
+}
+.frame::after {
+  bottom: -2px; right: -2px;
+  border-bottom: 2px solid var(--purple); border-right: 2px solid var(--purple);
+  border-bottom-right-radius: var(--radius);
+  filter: drop-shadow(0 0 6px var(--purple));
+}
+
+/* ----- 버튼 ----- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 22px;
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 1rem; font-weight: 700;
+  color: var(--cyan);
+  background: rgba(40, 224, 255, 0.08);
+  border: 1px solid var(--cyan);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: inset 0 0 14px rgba(40, 224, 255, 0.12);
+  text-decoration: none;
+  user-select: none;
+}
+.btn:hover { background: rgba(40, 224, 255, 0.18); box-shadow: var(--glow-c), inset 0 0 14px rgba(40, 224, 255, 0.2); }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
+.btn.purple { color: #dca8ff; border-color: var(--purple); background: rgba(180, 76, 255, 0.1); }
+.btn.purple:hover { background: rgba(180, 76, 255, 0.2); box-shadow: var(--glow-p); }
+.btn.red { color: #ff9eb0; border-color: var(--red); background: rgba(255, 59, 92, 0.1); }
+.btn.red:hover { background: rgba(255, 59, 92, 0.22); box-shadow: 0 0 12px rgba(255, 59, 92, 0.5); }
+.btn.ghost { border-color: var(--line-dim); color: var(--text-dim); background: transparent; }
+.btn.ghost:hover { color: var(--text); border-color: var(--line); box-shadow: none; }
+.btn.big { font-size: 1.2rem; padding: 16px 34px; }
+.btn.small { font-size: 0.85rem; padding: 7px 14px; }
+
+/* ----- 입력 ----- */
+.input {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 1.1rem;
+  font-family: inherit;
+  color: var(--text);
+  background: rgba(10, 12, 30, 0.8);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: none;
+  transition: box-shadow 0.15s;
+}
+.input:focus { box-shadow: var(--glow-c); }
+.input::placeholder { color: var(--text-dim); }
+
+/* ----- 작은 유틸 ----- */
+.dim { color: var(--text-dim); }
+.cyan { color: var(--cyan); }
+.purple-t { color: #dca8ff; }
+.red-t { color: var(--red); }
+.yellow-t { color: var(--yellow); }
+.green-t { color: var(--green); }
+.center { text-align: center; }
+.row { display: flex; gap: 10px; align-items: center; }
+.wrap { flex-wrap: wrap; }
+.grow { flex: 1; }
+.justify-between { justify-content: space-between; }
+.btn.green { color: #aef7d0; border-color: var(--green); background: rgba(60, 255, 158, 0.1); }
+.btn.green:hover { background: rgba(60, 255, 158, 0.2); box-shadow: 0 0 12px rgba(60, 255, 158, 0.5); }
+hr.neon {
+  border: none; height: 1px; margin: 14px 0;
+  background: linear-gradient(90deg, transparent, var(--line), transparent);
+}
+
+/* ----- 타이머 ----- */
+.timer-display {
+  font-family: 'Black Han Sans', sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+  color: var(--cyan);
+  text-shadow: var(--glow-c);
+}
+.timer-display.danger { color: var(--red); text-shadow: 0 0 12px rgba(255, 59, 92, 0.8); }
+
+/* ----- 단서 카드 ----- */
+.clue-card {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: inset 0 0 24px rgba(40, 224, 255, 0.05);
+}
+.clue-card .clue-no {
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em;
+  color: var(--cyan); opacity: 0.9;
+}
+.clue-card h3 { font-size: 1.15rem; margin: 6px 0 10px; }
+.clue-card .clue-desc { line-height: 1.65; font-size: 0.98rem; }
+.clue-hint {
+  margin-top: 12px;
+  border: 1px dashed rgba(255, 210, 60, 0.45);
+  border-radius: 10px;
+  background: rgba(255, 210, 60, 0.06);
+  padding: 12px 14px;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: #ffe9a8;
+}
+.clue-hint summary { cursor: pointer; color: var(--yellow); font-weight: 700; list-style: none; }
+.clue-hint summary::before { content: '🔍 '; }
+.clue-hint[open] summary { margin-bottom: 8px; }
+
+/* ----- 증거 이미지 ----- */
+.evidence-photo {
+  --evidence-accent: var(--cyan);
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--evidence-accent) 48%, transparent);
+  background: rgba(6, 8, 20, 0.78);
+  box-shadow:
+    inset 0 0 24px rgba(255, 255, 255, 0.03),
+    0 0 18px color-mix(in srgb, var(--evidence-accent) 18%, transparent);
+  margin: 0 0 13px;
+  transform-origin: center top;
+  cursor: zoom-in;
+}
+
+.evidence-photo-number {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  min-width: 42px;
+  height: 42px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 2px solid var(--evidence-accent);
+  background: rgba(2, 3, 12, 0.88);
+  color: #fff;
+  box-shadow: 0 0 16px color-mix(in srgb, var(--evidence-accent) 45%, transparent);
+  font-family: 'Black Han Sans', 'Noto Sans KR', sans-serif;
+  font-size: 1.15rem;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.evidence-photo::after {
+  content: none;
+}
+
+.evidence-photo img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1.38 / 1;
+  object-fit: cover;
+}
+
+.evidence-photo figcaption {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 9px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  text-shadow: 0 1px 8px #000;
+}
+
+.evidence-photo figcaption span {
+  color: var(--evidence-accent);
+  font-family: monospace;
+  letter-spacing: 0.08em;
+}
+
+.evidence-photo figcaption b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evidence-photo--mini {
+  flex: 0 0 112px;
+  width: 112px;
+  margin: 0;
+  border-radius: 10px;
+}
+
+.evidence-photo--mini .evidence-photo-number {
+  top: 7px;
+  left: 7px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  font-size: 0.9rem;
+  border-width: 1px;
+}
+
+.evidence-photo--mini img {
+  aspect-ratio: 1.08 / 1;
+}
+
+.evidence-photo--mini figcaption {
+  display: none;
+}
+
+.evidence-photo--large {
+  width: min(440px, 100%);
+  margin: 0;
+}
+
+.evidence-photo--large .evidence-photo-number {
+  min-width: 50px;
+  height: 50px;
+  font-size: 1.35rem;
+}
+
+.evidence-photo--large img {
+  aspect-ratio: 1.22 / 1;
+}
+
+.evidence-photo--wide img {
+  aspect-ratio: 1.8 / 1;
+}
+
+.zone-visual-image {
+  cursor: zoom-in;
+}
+
+.evidence-photo:focus-visible,
+.zone-visual-image:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 4px;
+}
+
+html.clue-lightbox-lock,
+html.clue-lightbox-lock body {
+  overflow: hidden;
+}
+
+.clue-lightbox {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 34px;
+  background: rgba(2, 3, 10, 0.94);
+  z-index: 5000;
+}
+
+.clue-lightbox.open {
+  display: flex;
+}
+
+.clue-lightbox-frame {
+  width: min(96vw, 1240px);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+}
+
+.clue-lightbox-image {
+  display: block;
+  max-width: 100%;
+  max-height: 82vh;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px solid rgba(40, 224, 255, 0.34);
+  background: #050713;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+}
+
+.clue-lightbox-caption {
+  max-width: min(92vw, 980px);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 800;
+  text-align: center;
+  text-shadow: 0 1px 10px #000;
+}
+
+.clue-lightbox-close {
+  position: fixed;
+  top: 22px;
+  right: 24px;
+  width: 46px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  background: rgba(10, 12, 30, 0.92);
+  border: 1px solid rgba(40, 224, 255, 0.42);
+  border-radius: 10px;
+  font-size: 2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.clue-lightbox-close:hover,
+.clue-lightbox-close:focus-visible {
+  background: rgba(40, 224, 255, 0.16);
+  outline: none;
+}
+
+@media (max-width: 720px) {
+  .clue-lightbox {
+    padding: 18px;
+  }
+
+  .clue-lightbox-image {
+    max-height: 76vh;
+  }
+
+  .clue-lightbox-close {
+    top: 12px;
+    right: 12px;
+  }
+}
+
+.zone-evidence-board {
+  width: 100%;
+  height: 100%;
+  padding: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 28px;
+  background:
+    linear-gradient(135deg, rgba(8, 11, 28, 0.94), rgba(13, 16, 38, 0.78)),
+    linear-gradient(90deg, rgba(40, 224, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(40, 224, 255, 0.08) 1px, transparent 1px);
+  background-size: auto, 54px 54px, 54px 54px;
+}
+
+.zone-evidence-title {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.zone-evidence-title span {
+  width: 96px;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--evidence-accent) 58%, transparent);
+  background: rgba(6, 8, 20, 0.7);
+  font-size: 4.2rem;
+  box-shadow: 0 0 24px color-mix(in srgb, var(--evidence-accent) 24%, transparent);
+}
+
+.zone-evidence-title b {
+  display: block;
+  color: var(--evidence-accent);
+  font-size: 2.3rem;
+  font-family: 'Black Han Sans', 'Noto Sans KR', sans-serif;
+  font-weight: 400;
+}
+
+.zone-evidence-title em {
+  display: block;
+  margin-top: 8px;
+  color: var(--text-dim);
+  font-style: normal;
+  font-size: 1.25rem;
+}
+
+.zone-evidence-photos {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.zone-evidence-photos .evidence-photo {
+  width: 100%;
+  min-height: 190px;
+}
+
+.scan-reveal {
+  position: relative;
+  overflow: hidden;
+}
+
+.scan-reveal::after {
+  content: none;
+}
+
+/* ----- 용의자 카드 ----- */
+.suspect-chip {
+  display: flex; align-items: center; gap: 12px;
+  border: 1px solid var(--line-dim);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--panel-2);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.suspect-chip:hover { border-color: var(--line); }
+.suspect-chip.selected { border-color: var(--red); box-shadow: 0 0 14px rgba(255, 59, 92, 0.4); background: rgba(255, 59, 92, 0.08); }
+.suspect-avatar {
+  width: 46px; height: 46px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.5rem;
+  background: rgba(40, 224, 255, 0.08);
+  border: 2px solid var(--line);
+  flex-shrink: 0;
+}
+
+/* ----- 스크롤바 ----- */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(40, 224, 255, 0.25); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(40, 224, 255, 0.45); }
+
+/* ----- 토스트 ----- */
+#toast {
+  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px);
+  background: rgba(10, 12, 30, 0.95);
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 12px 22px;
+  border-radius: 12px;
+  box-shadow: var(--glow-c);
+  opacity: 0; pointer-events: none;
+  transition: all 0.25s ease;
+  z-index: 999;
+  max-width: 90vw;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#toast.error { border-color: var(--red); box-shadow: 0 0 14px rgba(255, 59, 92, 0.5); }
+
+/* ----- 페이드 전환 ----- */
+.fade-in { animation: fadeIn 0.4s ease both; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+.pulse-glow { animation: none; }
