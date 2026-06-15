@@ -8,6 +8,15 @@ const { chromium } = require("playwright");
 const rootDir = path.join(__dirname, "..");
 const artifactDir = path.join(rootDir, "artifacts");
 const requestedBaseUrl = process.env.BASE_URL || "";
+const correctFinalPayload = {
+  culprit: "seoyun",
+  trueTime: "21:08",
+  method: "복제 마스터 카드로 케이스를 열고 자석 센서 장치로 운석 도난 시간을 숨겼다.",
+  staging: "조정실에서 낚시줄을 원격으로 당겨 21:17 경보가 늦게 울리게 했다.",
+  hidden: "별자리 지도 보관통을 장비 상자 안에 숨겼다.",
+  motive: "아버지의 발견을 표절당했다는 원한과 빚, 돈 문제가 겹쳤다.",
+  evidence: ["E14", "E18", "E20", "E21", "E23", "E24"],
+};
 
 function getFreePort() {
   return new Promise((resolve, reject) => {
@@ -74,6 +83,34 @@ async function startServer() {
   try {
     await page.goto(baseUrl, { waitUntil: "networkidle" });
     await page.waitForSelector("#caseEntry");
+    const publicHookState = await page.evaluate(() => ({
+      gameTestApi: typeof window.gameTestApi,
+      renderGameToText: typeof window.render_game_to_text,
+      runtimeLoader: typeof window.__loadCaseRuntimeData,
+    }));
+    assert.strictEqual(publicHookState.gameTestApi, "undefined", "real page should not expose answer-bearing test hooks");
+    assert.strictEqual(publicHookState.renderGameToText, "undefined", "real page should not expose test snapshot helpers");
+    assert.strictEqual(
+      publicHookState.runtimeLoader,
+      "undefined",
+      "runtime data loader should not remain globally callable on the real page",
+    );
+
+    await page.addInitScript(() => {
+      Object.defineProperty(window, "__CRIMESCENE_TEST_MODE__", {
+        value: true,
+        configurable: false,
+        writable: false,
+      });
+    });
+    await page.goto(baseUrl, { waitUntil: "networkidle" });
+    await page.waitForSelector("#caseEntry");
+    const testHookState = await page.evaluate(() => ({
+      gameTestApi: typeof window.gameTestApi,
+      renderGameToText: typeof window.render_game_to_text,
+    }));
+    assert.strictEqual(testHookState.gameTestApi, "object", "smoke mode should install browser test hooks");
+    assert.strictEqual(testHookState.renderGameToText, "function", "smoke mode should install snapshot helper");
 
     const entryImagesLoaded = await page.evaluate(() =>
       Array.from(document.querySelectorAll("#caseEntry img")).every((img) => img.complete && img.naturalWidth > 0),
@@ -89,6 +126,7 @@ async function startServer() {
 
     await page.click("#openCaseBtn");
     await page.waitForSelector("#gameHub");
+    await page.waitForSelector(".case-compass");
 
     const briefingImagesLoaded = await page.evaluate(() =>
       Array.from(document.querySelectorAll("#gameHub img")).every((img) => img.complete && img.naturalWidth > 0),
@@ -124,6 +162,10 @@ async function startServer() {
     assertNoEarlyTerms(briefingState.text, "opening briefing");
     assert.strictEqual(briefingState.miniEvidenceCount, 0, "briefing should not render concrete evidence mini-cards");
     assert.strictEqual(briefingState.publicAnchorsPresent, true, "opening should retain public case anchors and claimed alibis");
+    const briefingCompass = await page.textContent(".case-compass");
+    assert(briefingCompass.includes("수사 진행 안내"), "briefing should include a non-spoiling progress guide");
+    assert(!/E\d{2}/.test(briefingCompass), "briefing progress guide should not expose evidence ids");
+    assertNoEarlyTerms(briefingCompass, "briefing progress guide");
 
     const initial = JSON.parse(await page.evaluate(() => window.render_game_to_text()));
     assert.strictEqual(initial.title, "0시 17분, 별이 사라진 밤");
@@ -160,6 +202,10 @@ async function startServer() {
     }));
     assert(sceneArtwork.count >= 2, "scene should render location and evidence artwork");
     assert.strictEqual(sceneArtwork.allLoaded, true, "scene artwork should load");
+    const initialCompass = await page.textContent(".case-compass");
+    assert(initialCompass.includes("다음 조사"), "investigation guide should show a next-location cue");
+    assert(initialCompass.includes("현장 열기"), "investigation guide should offer a direct navigation action");
+    assert(!/E\d{2}/.test(initialCompass), "investigation guide should stay non-spoiling before evidence collection");
 
     const allSceneIds = await page.evaluate(() => window.CASE_DATA.LOCATIONS.map((location) => location.id));
     for (const locationId of allSceneIds) {
@@ -273,6 +319,12 @@ async function startServer() {
     assert(searchState.cards.every((text) => text.includes("경보")), "notebook search should filter visible evidence");
     assert(searchState.cards.some((text) => text.includes("관찰 메모")), "notebook evidence should include expanded observation notes");
     assert(searchState.cards.some((text) => text.includes("대조 포인트")), "notebook evidence should include deduction comparison hints");
+    const notebookVisualState = await page.evaluate(() => ({
+      modules: document.querySelectorAll(".evidence-visual").length,
+      text: document.querySelector("#notebookView")?.textContent || "",
+    }));
+    assert(notebookVisualState.modules >= 1, "notebook evidence should render a visualization module for visual evidence");
+    assert(notebookVisualState.text.includes("오디오"), "audio evidence should render an audio-style visualization label");
     const notebookInterpretationLeak = await page.evaluate(() => {
       const text = document.querySelector("#notebookView")?.textContent || "";
       return ["낚시줄과 자석", "복제 카드 가능성", "실제 도난 시간이 아님", "범인과 운석 위치"].some((term) =>
@@ -299,6 +351,27 @@ async function startServer() {
     const boardHelpText = await page.textContent("#boardView");
     assert(boardHelpText.includes("대조:"), "deduction board should show comparison hints on evidence chips");
     assert(boardHelpText.includes("21:06-21:10"), "deduction board should surface concrete comparison anchors");
+    const boardAxisState = await page.evaluate(() => ({
+      lanes: document.querySelectorAll(".board-axis-lane").length,
+      text: document.querySelector("#boardView")?.textContent || "",
+    }));
+    assert(boardAxisState.lanes >= 3, "deduction board should group evidence into reasoning-axis lanes");
+    assert(boardAxisState.text.includes("시간 축"), "deduction board should name the time reasoning lane");
+    await page.evaluate(() => window.gameTestApi.collect(["E18", "E19"]));
+    const readyCompass = await page.textContent(".case-compass");
+    assert(readyCompass.includes("검증 가능한 축"), "progress guide should surface board-ready reasoning axes");
+    assert(readyCompass.includes("수단 / 시간 / 은폐"), "progress guide should name only reasoning types for ready links");
+    assert(!/E\d{2}/.test(readyCompass), "progress guide should not reveal exact evidence bundles");
+
+    await page.evaluate(() => window.gameTestApi.collect(["E14", "E16", "E20"]));
+    await page.click('[data-action="set-view"][data-view="suspects"]');
+    await page.click('[data-action="set-suspect"][data-suspect="seoyun"]');
+    const suspectProgressState = await page.evaluate(() => ({
+      panels: document.querySelectorAll(".interview-status-grid").length,
+      text: document.querySelector("#suspectView")?.textContent || "",
+    }));
+    assert(suspectProgressState.panels >= 1, "suspect interview should summarize related evidence progress");
+    assert(suspectProgressState.text.includes("관련 증거"), "suspect interview should label related evidence progress");
 
     await page.evaluate(() => {
       window.gameTestApi.solveRule("R3");
@@ -333,6 +406,29 @@ async function startServer() {
     assert.strictEqual(corePlusTwo.finalReady, true, "final accusation should unlock after core rules plus two eliminations");
     assert(corePlusTwo.discovered.includes("E24"), "decisive final evidence should unlock when final readiness is reached");
 
+    await page.evaluate(() => window.gameTestApi.setView("final"));
+    const nearMiss = await page.evaluate(() =>
+      window.gameTestApi.submitFinal({
+        method: "케이스를 열었다.",
+        staging: "경보가 울렸다.",
+        hidden: "어딘가에 숨겼다.",
+        motive: "돈 문제였다.",
+        evidence: ["E14"],
+      }),
+    );
+    assert.strictEqual(nearMiss.result.accepted, false, "near-miss final accusation should remain rejected");
+    const nearMissFeedback = await page.evaluate(() => ({
+      rows: document.querySelectorAll(".final-review-list li").length,
+      actions: document.querySelectorAll(".final-review-actions button").length,
+      methodValue: document.querySelector('[name="method"]')?.value || "",
+      text: document.querySelector("#finalView")?.textContent || "",
+    }));
+    assert(nearMissFeedback.rows >= 3, "near-miss final feedback should list category-level review items");
+    assert(nearMissFeedback.text.includes("수단"), "near-miss final feedback should name weak reasoning categories");
+    assert(nearMissFeedback.actions >= 2, "near-miss final feedback should offer recovery navigation");
+    assert.strictEqual(nearMissFeedback.methodValue, "케이스를 열었다.", "near-miss final form should preserve submitted method text");
+    assert(!nearMissFeedback.text.includes("E20 + E23"), "near-miss final feedback should not reveal exact evidence bundles");
+
     const solved = await page.evaluate(() => {
       window.gameTestApi.collect("all");
       ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8"].forEach((id) => {
@@ -345,7 +441,7 @@ async function startServer() {
     assert.strictEqual(solved.finalReady, true, "final accusation should unlock after required deductions");
     assert.strictEqual(solved.evidenceCount, 24, "all evidence should be discoverable by the endgame");
 
-    const final = await page.evaluate(() => window.gameTestApi.submitFinal());
+    const final = await page.evaluate((payload) => window.gameTestApi.submitFinal(payload), correctFinalPayload);
     assert.strictEqual(final.result.accepted, true, "correct final accusation should be accepted");
     assert(final.result.score >= 85, "final score should reward a complete accusation");
 
