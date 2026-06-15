@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>과학실의 소동 — 진행자 패널</title>
+  <link rel="stylesheet" href="/css/theme.css">
+  <style>
+    body {
+      padding: 24px;
+      overflow-x: hidden;
+    }
+
+    #app {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .header-panel {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 24px;
+    }
+
+    .header-panel h1 {
+      font-size: 1.8rem;
+    }
+
+    .room-info-row {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+    }
+
+    .room-code-badge {
+      font-size: 1.4rem;
+      font-family: 'Black Han Sans', sans-serif;
+      color: var(--cyan);
+      border: 1px solid var(--cyan);
+      padding: 4px 14px;
+      border-radius: 8px;
+      background: rgba(40, 224, 255, 0.08);
+      letter-spacing: 0.05em;
+    }
+
+    /* 레이아웃 분할 */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr 320px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    /* 네비게이션 컬럼 */
+    .nav-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .nav-btn {
+      width: 100%;
+      text-align: left;
+      padding: 14px 18px;
+      border-radius: 10px;
+      background: var(--panel-2);
+      border: 1px solid var(--line-dim);
+      color: var(--text-dim);
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .nav-btn:hover {
+      border-color: var(--cyan);
+      color: var(--text);
+    }
+
+    .nav-btn.active {
+      background: rgba(40, 224, 255, 0.08);
+      border-color: var(--cyan);
+      color: var(--cyan);
+      box-shadow: var(--glow-c);
+    }
+
+    /* 타이머 제어 패널 */
+    .timer-panel {
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .timer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .timer-controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* 콘텐츠 카드 */
+    .content-panel {
+      padding: 24px;
+      min-height: 500px;
+    }
+
+    .content-panel h2 {
+      font-size: 1.4rem;
+      margin-bottom: 15px;
+      color: var(--cyan);
+      border-bottom: 1px solid var(--line-dim);
+      padding-bottom: 10px;
+    }
+
+    .control-section {
+      margin-top: 20px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      padding: 20px;
+      border-radius: 10px;
+    }
+
+    .control-section h3 {
+      font-size: 1.1rem;
+      margin-bottom: 12px;
+    }
+
+    .btn-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    /* 플레이어 대기실/관리 */
+    .player-list-panel {
+      padding: 20px;
+    }
+
+    .player-list-panel h2 {
+      font-size: 1.2rem;
+      margin-bottom: 15px;
+      border-bottom: 1px solid var(--line-dim);
+      padding-bottom: 10px;
+    }
+
+    .player-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 500px;
+      overflow-y: auto;
+      padding-right: 5px;
+    }
+
+    .player-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      background: var(--panel-2);
+      border: 1px solid var(--line-dim);
+      border-radius: 8px;
+      font-size: 0.92rem;
+    }
+
+    .player-row.me {
+      border-color: var(--cyan);
+    }
+
+    .player-row.off {
+      opacity: 0.4;
+    }
+
+    .player-row.bot {
+      border-color: rgba(180, 76, 255, 0.42);
+      background: rgba(180, 76, 255, 0.07);
+      box-shadow: inset 0 0 16px rgba(180, 76, 255, 0.08);
+    }
+
+    .bot-chip {
+      display: inline-block;
+      margin-left: 7px;
+      padding: 2px 7px;
+      border: 1px solid rgba(180, 76, 255, 0.55);
+      border-radius: 999px;
+      color: #dca8ff;
+      background: rgba(180, 76, 255, 0.12);
+      font-size: 0.68rem;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      vertical-align: middle;
+    }
+
+    .bot-lab-panel {
+      margin-top: 0;
+      background:
+        linear-gradient(135deg, rgba(180, 76, 255, 0.08), rgba(40, 224, 255, 0.035)),
+        rgba(255, 255, 255, 0.02);
+      border-color: rgba(180, 76, 255, 0.22);
+    }
+
+    .bot-lab-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .bot-lab-head h3 {
+      margin-bottom: 5px;
+      color: #dca8ff;
+    }
+
+    .bot-lab-head p {
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .bot-count-input {
+      width: 84px;
+      flex: 0 0 84px;
+      text-align: center;
+    }
+
+    .kick-btn {
+      background: transparent;
+      border: none;
+      color: var(--red);
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+
+    .kick-btn:hover {
+      text-decoration: underline;
+    }
+
+    /* 세부 구역 제어 그리드 */
+    .zone-btn-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-top: 15px;
+    }
+
+    .zone-ctrl-btn {
+      padding: 14px;
+      background: rgba(10, 12, 35, 0.6);
+      border: 1px solid var(--line-dim);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .zone-ctrl-btn:hover {
+      border-color: var(--cyan);
+      background: rgba(40, 224, 255, 0.05);
+    }
+
+    .zone-ctrl-btn.active {
+      border-color: var(--cyan);
+      background: rgba(40, 224, 255, 0.12);
+      box-shadow: var(--glow-c);
+      color: var(--cyan);
+    }
+
+    .zone-ctrl-btn.suspect-btn.active {
+      border-color: var(--purple);
+      background: rgba(180, 76, 255, 0.12);
+      box-shadow: var(--glow-p);
+      color: #dca8ff;
+    }
+
+    /* 방 생성 모달/상자 */
+    #setup-box {
+      max-width: 480px;
+      margin: 100px auto;
+      padding: 30px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- 방 생성 화면 -->
+    <div class="panel frame" id="setup-box">
+      <div style="font-size: 3.5rem; margin-bottom: 15px;">🕵️‍♂️</div>
+      <h2 class="neon-title" style="font-size: 2rem; margin-bottom: 25px;">크라임씬 진행자 시스템</h2>
+      <button class="btn big" id="btn-create-room" style="width: 100%;">새 게임 방 만들기</button>
+      <div id="rejoin-host-area" style="margin-top: 20px; display: none;">
+        <hr class="neon"/>
+        <button class="btn ghost" id="btn-rejoin-host" style="width: 100%;">이전 방 진행 복원하기</button>
+      </div>
+    </div>
+
+    <!-- 진행 대시보드 (방 활성화 시 노출) -->
+    <div id="dashboard-box" style="display: none;">
+      <!-- 상단 컨트롤 바 -->
+      <div class="panel frame header-panel" style="margin-bottom: 20px;">
+        <div class="room-info-row">
+          <h1>과학실의 소동 <span class="dim" style="font-size: 1.1rem;">진행 마스터</span></h1>
+          <span class="room-code-badge" id="host-code-val">----</span>
+          <a id="btn-open-display" class="btn small cyan" target="_blank">공유 디스플레이 창 열기</a>
+        </div>
+        <div>
+          <button class="btn small red" id="btn-destroy-room">방 폭파/초기화</button>
+        </div>
+      </div>
+
+      <div class="main-grid">
+        <!-- 1) 좌측 네비게이션: 단계 전환 -->
+        <div class="nav-list" id="phase-nav-container">
+          <!-- 페이즈 전환 버튼 동적 로드 -->
+        </div>
+
+        <!-- 2) 중앙 영역: 현재 단계별 세부 컨트롤 -->
+        <div>
+          <!-- 타이머 공통 패널 -->
+          <div class="panel frame timer-panel">
+            <div class="timer-header">
+              <span class="dim" style="font-size: 0.95rem; font-weight: 700;">⏱️ 공유 타이머 제어</span>
+              <span class="timer-display" id="host-timer-val" style="font-size: 1.8rem;">00:00</span>
+            </div>
+            <div class="timer-controls">
+              <button class="btn small" data-timer-act="start" data-sec="600">10분 설정</button>
+              <button class="btn small" data-timer-act="start" data-sec="300">5분 설정</button>
+              <button class="btn small purple" data-timer-act="resume">재개 (Resume)</button>
+              <button class="btn small purple" data-timer-act="pause">일시정지</button>
+              <button class="btn small ghost" data-timer-act="add" data-sec="60">+1분</button>
+              <button class="btn small red" data-timer-act="reset">리셋</button>
+            </div>
+          </div>
+
+          <!-- 단계별 동적 제어판 -->
+          <div class="panel frame content-panel" id="phase-content-panel">
+            <h2>진행 상황</h2>
+            <div id="phase-detail-ctrl">
+              <!-- 선택된 단계의 제어 장치 동적 렌더링 -->
+            </div>
+          </div>
+        </div>
+
+        <!-- 3) 우측 영역: 참가자 관리 및 역할 배정 정보 -->
+        <div class="panel frame player-list-panel">
+          <h2>수사대원 현황 <span id="player-count-badge" class="dim">0/20</span></h2>
+          <div class="player-rows" id="host-players-list">
+            <!-- 플레이어 리스트 및 퇴장 처리 -->
+          </div>
+          
+          <div class="control-section" style="margin-top: 25px;" id="role-assign-summary-box">
+            <h3 class="purple-t">👥 역할 배정 요약</h3>
+            <div id="role-assign-detail" style="font-size: 0.88rem; line-height: 1.6;" class="dim">
+              역할이 배정되지 않았습니다.
+            </div>
+          </div>
+
+          <div class="control-section" style="margin-top: 18px;" id="host-intel-box">
+            <h3 class="yellow-t">🔐 전체 정보 열람 (진행자 전용)</h3>
+            <div id="host-intel-detail" style="font-size: 0.86rem; line-height: 1.6;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/host.js"></script>
+</body>
+</html>
