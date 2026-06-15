@@ -1,18 +1,17 @@
 {
-  "name": "crimescene-multiplayer-web",
+  "name": "crime-scene-investigation-game",
   "version": "1.0.0",
-  "description": "과학실의 소동 멀티플레이어 크라임씬 웹 게임 서버",
-  "main": "server.js",
+  "private": true,
+  "description": "Playable single-device Korean crime-scene investigation webgame.",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node test/e2e.js"
+    "test:smoke": "node scripts/smoke-test.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "socket.io": "^4.7.5"
+    "express": "^4.19.2"
   },
   "devDependencies": {
-    "socket.io-client": "^4.8.1"
+    "playwright": "^1.45.3"
   }
 }
