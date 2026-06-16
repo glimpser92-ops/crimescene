@@ -1,0 +1,11 @@
+node_modules/
+.omo/
+.omx/
+.gemini/
+*.log
+*.pid
+artifacts/dev-server-url.txt
+artifacts/dev-server.log
+artifacts/dev-server.pid
+artifacts/smoke-summary.json
+artifacts/visual-clue-flow-report.json

@@ -29,6 +29,29 @@
     dohyunCleared: "dohyun",
     eunbyeolCleared: "eunbyeol",
   };
+  const VISUAL_TYPES = {
+    "security-log": ["보안 로그", "권한 기록", "시각과 보관 상태를 따로 대조하세요."],
+    "audio-strip": ["오디오 스트립", "파형 기록", "큰 파손음보다 작은 작동음의 순서를 보세요."],
+    "route-map": ["동선 지도", "흔적 경로", "흔적이 이어지는 구간과 비어 있는 시간을 나눠 보세요."],
+    document: ["문서 기록", "서류 단서", "동기와 실행 가능성을 분리해 읽으세요."],
+    "object-state": ["물건 상태", "상태 변화", "겉보기 용도와 실제 흔적을 비교하세요."],
+    schedule: ["일정표", "시간표", "표시된 일정과 기록 공백이 겹치는지 보세요."],
+    "witness-card": ["진술 카드", "기준 진술", "주장 위치를 다른 기록과 하나씩 대조하세요."],
+    "cctv-strip": ["CCTV 스트립", "영상 구간", "지속적으로 보이는 시간과 비는 시간을 구분하세요."],
+    timeline: ["타임라인", "연속 기록", "전후 순서가 맞는지 한 줄로 놓고 보세요."],
+    inventory: ["물품 대장", "반출입 기록", "빌린 물건과 돌아온 상태를 분리해 확인하세요."],
+    manual: ["매뉴얼", "작동 조건", "장치가 언제 반응하는지 조건을 읽으세요."],
+    message: ["메시지", "후속 계획", "사건 뒤의 이동 계획과 동기를 연결하세요."],
+    history: ["관계 기록", "과거 문서", "오래된 갈등이 현재 행동과 어떻게 닿는지 보세요."],
+    decisive: ["결정 단서", "최종 확인", "앞선 시간표와 물건 흐름이 맞을 때만 의미가 커집니다."],
+  };
+  const BOARD_AXIS_LANES = [
+    { title: "시간 축", tags: ["시간", "알리바이"], note: "시각, 공백, 체류 기록을 먼저 세웁니다." },
+    { title: "수단 축", tags: ["수단", "물건", "흔적"], note: "도구 후보와 물건의 실제 성질을 분리합니다." },
+    { title: "동선 축", tags: ["동선", "은폐"], note: "사람이 움직인 길과 장치가 움직인 길을 나눕니다." },
+    { title: "동기/해소 축", tags: ["동기", "관계", "결백", "문서"], note: "의심스러운 이유와 실행 가능성을 따로 판단합니다." },
+  ];
+  const TIMELINE_FLOW_TYPES = new Set(["timeline", "audio-strip", "schedule", "security-log", "cctv-strip"]);
 
   const state = {
     started: false,
@@ -49,6 +72,7 @@
     hintsUsed: 0,
     hintIndex: -1,
     finalResult: null,
+    finalDraft: null,
     revealIndex: 0,
     unlockNotice: null,
     newlyAvailable: new Set(),
@@ -131,25 +155,160 @@
     return `최종 조건: 핵심 추리 ${coreCount}/4, 용의자 검증 ${Math.min(clearedCount, 2)}/2`;
   }
 
+  function evidenceTagSummary(ids) {
+    const tags = [];
+    ids.forEach((id) => {
+      const card = evidenceById.get(id);
+      (card?.tags || []).forEach((tag) => {
+        if (!tags.includes(tag)) tags.push(tag);
+      });
+    });
+    return tags.slice(0, 3).join(" / ") || "현장";
+  }
+
+  function visualizationMeta(card) {
+    return VISUAL_TYPES[card?.visualization] || ["증거 모듈", "관찰 기록", "출처와 대조 포인트를 함께 보세요."];
+  }
+
+  function renderEvidenceVisual(card) {
+    if (!card?.visualization) return "";
+    const [label, title, note] = visualizationMeta(card);
+    const tags = (card.tags || []).slice(0, 3);
+    return `
+      <div class="evidence-visual evidence-visual-${escapeHtml(card.visualization)}">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(title)}</strong>
+        <p>${escapeHtml(note)}</p>
+        <div>
+          ${tags.map((tag) => `<small>${escapeHtml(tag)}</small>`).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function isRouteFlowCard(card) {
+    return card?.visualization === "route-map" || (card?.tags || []).includes("동선") || (card?.supports || []).includes("동선");
+  }
+
+  function isTimelineFlowCard(card) {
+    const tags = card?.tags || [];
+    const supports = card?.supports || [];
+    return TIMELINE_FLOW_TYPES.has(card?.visualization) || tags.includes("시간") || tags.includes("알리바이") || supports.includes("알리바이");
+  }
+
+  function clueFlowText(card) {
+    return card?.playerText || card?.detail || card?.boardHint || "";
+  }
+
+  function clueFlowDetail(card) {
+    return card?.detail && card.detail !== clueFlowText(card) ? card.detail : card?.boardHint || "";
+  }
+
+  function clueFlowTimeLabel(card) {
+    const text = `${card?.playerText || ""} ${card?.detail || ""} ${card?.boardHint || ""}`;
+    const match = text.match(/\d{2}:\d{2}(?:-\d{2}:\d{2})?/);
+    if (match) return match[0];
+    const [label] = visualizationMeta(card);
+    return label;
+  }
+
+  function clueFlowSortKey(card) {
+    const label = clueFlowTimeLabel(card);
+    const match = label.match(/(\d{2}):(\d{2})/);
+    if (!match) return 9999 + Number(card.id.slice(1));
+    return Number(match[1]) * 60 + Number(match[2]);
+  }
+
+  function renderFlowCard(card, mode) {
+    const location = evidenceLocation(card);
+    const newClass = state.newlyAdded.has(card.id) ? " is-new" : "";
+    const detail = clueFlowDetail(card);
+    const marker = mode === "timeline" ? clueFlowTimeLabel(card) : locationById.get(card.location)?.shortName || location;
+    return `
+      <article class="flow-card flow-card-${mode}${newClass}" data-flow-card="${escapeHtml(card.id)}">
+        <span>${escapeHtml(marker)}</span>
+        <div>
+          <em>${escapeHtml(card.id)} · ${escapeHtml(location)}</em>
+          <strong>${escapeHtml(card.title)}</strong>
+          <p>${formatText(clueFlowText(card))}</p>
+          ${detail ? `<small>${formatText(detail)}</small>` : ""}
+        </div>
+      </article>
+    `;
+  }
+
+  function renderClueFlowPanel() {
+    const cards = discoveredCards();
+    const routeCards = cards.filter(isRouteFlowCard);
+    const timelineCards = cards.filter(isTimelineFlowCard).sort((left, right) => clueFlowSortKey(left) - clueFlowSortKey(right));
+    if (!routeCards.length && !timelineCards.length) return "";
+
+    return `
+      <section class="clue-flow-panel" aria-label="획득 단서 동선과 시간표">
+        <div class="panel-heading">
+          <p class="eyebrow">Clue flow</p>
+          <h2>사건 동선과 시간표</h2>
+        </div>
+        <div class="flow-grid">
+          <article class="flow-lane flow-route-lane" data-flow-lane="route">
+            <header>
+              <span>동선 지도</span>
+              <strong>흔적이 이어지는 구간</strong>
+            </header>
+            <div class="flow-route-track">
+              ${routeCards.map((card) => renderFlowCard(card, "route")).join("") || `<p class="empty-note">동선 단서를 확보하면 이동 경로가 여기에 붙습니다.</p>`}
+            </div>
+          </article>
+          <article class="flow-lane flow-timeline-lane" data-flow-lane="timeline">
+            <header>
+              <span>타임라인</span>
+              <strong>시각이 어긋나는 지점</strong>
+            </header>
+            <div class="flow-timeline-track">
+              ${timelineCards.map((card) => renderFlowCard(card, "timeline")).join("") || `<p class="empty-note">시간 단서를 확보하면 빈칸이 여기에 붙습니다.</p>`}
+            </div>
+          </article>
+        </div>
+      </section>
+    `;
+  }
+
+  function nextLocationLead() {
+    const counts = new Map();
+    availableUncollectedEvidence().forEach((id) => {
+      const card = evidenceById.get(id);
+      if (!card || card.round === "final") return;
+      const current = counts.get(card.location) || { id: card.location, ids: [], location: locationById.get(card.location) };
+      current.ids.push(id);
+      counts.set(card.location, current);
+    });
+    return Array.from(counts.values()).sort((left, right) => right.ids.length - left.ids.length)[0] || null;
+  }
+
+  function readyBoardLeads() {
+    return data.BOARD_RULES.filter(
+      (rule) => !state.solved.has(rule.id) && rule.required.every((id) => state.discovered.has(id)),
+    ).slice(0, 2);
+  }
+
   function renderUnlockRequirements(card, available, discovered) {
     if (!card || discovered || available) return "";
     const lines = [];
     const dependencies = card.dependsOn || [];
     if (dependencies.length) {
-      const found = dependencies.filter((id) => state.discovered.has(id)).length;
       lines.push({
-        label: "선행 단서",
-        text: `${found}/${dependencies.length} 확보 · ${dependencies.map(requirementLabel).join(" + ")}`,
+        label: "조사 흐름",
+        text: `${evidenceTagSummary(dependencies)} 축의 앞선 흔적이 더 모이면 이 지점이 열릴 수 있습니다.`,
       });
     }
 
     unlockingRules(card)
       .filter((rule) => !state.solved.has(rule.id))
       .forEach((rule) => {
-        const found = rule.required.filter((id) => state.discovered.has(id)).length;
+        const axis = (rule.typeHints || []).join(" / ") || evidenceTagSummary(rule.required);
         lines.push({
           label: "추리 보드",
-          text: `${found}/${rule.required.length} 연결 필요 · ${rule.required.map(requirementLabel).join(" + ")}`,
+          text: `${axis} 축에서 특정 연결이 성립하면 이 조사 지점이 열립니다.`,
         });
       });
 
@@ -398,9 +557,13 @@
       tone: "right",
       text: rule.result,
     };
+    const axis = (rule.typeHints || []).join(" / ") || "추리";
     setUnlockNotice({
       title: "연결 검증 완료",
-      message: "검증 결과로 새롭게 열람 가능한 항목이 갱신되었습니다.",
+      message:
+        addedIds.length || availableIds.length
+          ? `방금 확정한 ${axis} 연결로 확인할 단서가 생겼습니다. 아래 항목을 보세요.`
+          : `방금 확정한 ${axis} 연결이 사건 노트에 반영되었습니다.`,
       addedIds,
       availableIds,
       clearedIds: ruleUnlocks.clearedSuspects,
@@ -462,6 +625,10 @@
       return state.finalResult;
     }
 
+    state.finalDraft = {
+      ...payload,
+      evidence: Array.from(payload.evidence || []),
+    };
     const result = validateFinal(payload);
     state.finalResult = {
       ...result,
@@ -564,8 +731,57 @@
         }).join("")}
       </nav>
       ${renderUnlockNotice()}
+      ${renderCaseCompass()}
       <section class="workspace" id="gameHub">
         ${renderView()}
+      </section>
+    `;
+  }
+
+  function renderCaseCompass() {
+    const locationLead = nextLocationLead();
+    const boardLeads = readyBoardLeads();
+    const briefingMode = state.activeView === "briefing";
+    const location = locationLead?.location;
+    const locationText = briefingMode
+      ? "브리핑은 공개 정보만 확인합니다. 준비되면 현장 화면에서 첫 조사 지점을 여세요."
+      : locationLead
+        ? `${location?.name || "현장"} · ${locationLead.ids.length}개 조사 가능 · ${evidenceTagSummary(locationLead.ids)}`
+        : "현재 열려 있는 현장 단서는 모두 기록되었습니다. 증거 노트와 추리 보드를 대조하세요.";
+    const boardText = boardLeads.length
+      ? `검증 가능한 축: ${boardLeads.map((rule) => rule.typeHints.join(" / ")).join(" · ")}`
+      : state.discovered.size >= 2
+        ? "아직 확정 가능한 연결 축은 보이지 않습니다. 증거의 시간, 수단, 동선을 더 분리해 보세요."
+        : "증거 2개 이상을 확보하면 추리 보드에서 연결을 검증할 수 있습니다.";
+    const finalText = finalReady()
+      ? "최종 고발장이 열렸습니다. 범인, 시간, 수단, 은닉, 동기를 함께 제출하세요."
+      : finalGateLine();
+    const locationButton = briefingMode
+      ? `<button type="button" data-action="compass-view" data-view="scene">현장 열기</button>`
+      : locationLead
+        ? `<button type="button" data-action="compass-location" data-location="${locationLead.id}">현장 열기</button>`
+        : `<button type="button" data-action="compass-view" data-view="notebook">노트 대조</button>`;
+
+    return `
+      <section class="case-compass" aria-label="수사 진행 안내">
+        <article>
+          <span>수사 진행 안내</span>
+          <strong>다음 조사</strong>
+          <p>${escapeHtml(locationText)}</p>
+          ${locationButton}
+        </article>
+        <article>
+          <span>Deduction queue</span>
+          <strong>추리 보드</strong>
+          <p>${escapeHtml(boardText)}</p>
+          <button type="button" data-action="compass-view" data-view="board">보드 열기</button>
+        </article>
+        <article>
+          <span>Final gate</span>
+          <strong>최종 고발</strong>
+          <p>${escapeHtml(finalText)}</p>
+          <button type="button" data-action="compass-view" data-view="final" ${finalReady() ? "" : "disabled"}>고발장 열기</button>
+        </article>
       </section>
     `;
   }
@@ -659,9 +875,10 @@
   function renderEvidenceMini(id) {
     const card = evidenceById.get(id);
     if (!card) return "";
+    const clueImgSrc = `/images/clues/clue_${Number(card.id.slice(1))}.png`;
     return `
       <article class="mini-evidence">
-        <img class="evidence-thumb" src="${LOCATION_IMAGES[card.location] || HERO_IMAGE}" alt="" loading="lazy" />
+        <img class="evidence-thumb" src="${clueImgSrc}" alt="" loading="lazy" />
         <span>${escapeHtml(card.id)}</span>
         <strong>${escapeHtml(card.title)}</strong>
         <small>${escapeHtml(card.source)}</small>
@@ -672,9 +889,22 @@
   function renderScene() {
     const active = locationById.get(state.activeLocation) || data.LOCATIONS[0];
     return `
+      ${renderClueFlowPanel()}
       <div class="scene-layout">
         <section class="scene-map">
           <div class="map-board" aria-label="천문관 지도">
+            <svg class="map-connections" style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0;">
+              <line x1="50%" y1="22%" x2="26%" y2="28%" stroke="var(--brass)" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.45" />
+              <line x1="26%" y1="28%" x2="22%" y2="54%" stroke="var(--brass)" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.45" />
+              <line x1="22%" y1="54%" x2="72%" y2="55%" stroke="var(--brass)" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.45" />
+              <line x1="72%" y1="55%" x2="78%" y2="31%" stroke="var(--brass)" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.45" />
+              <line x1="78%" y1="31%" x2="50%" y2="22%" stroke="var(--brass)" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.45" />
+              
+              <line x1="50%" y1="22%" x2="22%" y2="54%" stroke="var(--teal)" stroke-width="1" stroke-dasharray="2 6" opacity="0.25" />
+              <line x1="50%" y1="22%" x2="72%" y2="55%" stroke="var(--teal)" stroke-width="1" stroke-dasharray="2 6" opacity="0.25" />
+              <line x1="78%" y1="31%" x2="22%" y2="54%" stroke="var(--teal)" stroke-width="1" stroke-dasharray="2 6" opacity="0.25" />
+              <line x1="26%" y1="28%" x2="72%" y2="55%" stroke="var(--teal)" stroke-width="1" stroke-dasharray="2 6" opacity="0.25" />
+            </svg>
             ${data.LOCATIONS.map((location) => `
               <button
                 type="button"
@@ -709,6 +939,7 @@
     const available = isEvidenceAvailable(card);
     const newlyAvailable = !discovered && state.newlyAvailable.has(id);
     const newlyAdded = discovered && state.newlyAdded.has(id);
+    const waitsForBoard = !discovered && !available && unlockingRules(card).some((rule) => !state.solved.has(rule.id));
     const label = discovered ? card.id : newlyAvailable ? "새로 열림" : "미확인";
     const title = discovered ? card.title : newlyAvailable ? "새로 열린 조사 지점" : available ? "미확인 흔적" : "봉인된 조사 지점";
     const source = discovered ? card.source : available ? "현장 조사 필요" : "다른 단서 필요";
@@ -718,10 +949,15 @@
         ? "관련 단서를 확보해 열람 가능해졌습니다. 조사하면 증거 노트에 기록됩니다."
         : available
           ? "조사하면 증거 노트에 기록됩니다."
-          : "관련 단서를 먼저 확보해야 열람할 수 있습니다.";
+          : waitsForBoard
+            ? "추리 보드에서 특정 연결이 성립하면 이 조사 지점이 열릴 수 있습니다."
+            : "관련 단서를 먼저 확보해야 열람할 수 있습니다.";
+    const thumbSrc = discovered
+      ? `/images/clues/clue_${Number(card.id.slice(1))}.png`
+      : LOCATION_IMAGES[card.location] || HERO_IMAGE;
     return `
       <article class="evidence-tile ${discovered ? "is-found" : ""} ${available && !discovered ? "is-available" : ""} ${newlyAvailable || newlyAdded ? "is-new" : ""} ${available ? "" : "is-locked"}">
-        <img class="evidence-thumb" src="${LOCATION_IMAGES[card.location] || HERO_IMAGE}" alt="" loading="lazy" />
+        <img class="evidence-thumb" src="${thumbSrc}" alt="" loading="lazy" />
         <div>
           <span>${escapeHtml(label)}</span>
           <strong>${escapeHtml(title)}</strong>
@@ -771,6 +1007,7 @@
           </button>
         `).join("")}
       </div>
+      ${renderClueFlowPanel()}
       <section class="evidence-grid" id="notebookView">
         ${cards.map((card) => renderEvidenceCard(card)).join("") || `<p class="empty-note">아직 확보한 증거가 없습니다. 현장에서 조사할 항목을 선택하세요.</p>`}
       </section>
@@ -779,9 +1016,10 @@
 
   function renderEvidenceCard(card) {
     const suspectTags = card.implicates.concat(card.clears).map((id) => suspectById.get(id)?.name).filter(Boolean);
+    const clueImgSrc = `/images/clues/clue_${Number(card.id.slice(1))}.png`;
     return `
       <article class="evidence-card ${state.newlyAdded.has(card.id) ? "is-new" : ""}">
-        <img class="evidence-thumb" src="${LOCATION_IMAGES[card.location] || HERO_IMAGE}" alt="" loading="lazy" />
+        <img class="evidence-thumb" src="${clueImgSrc}" alt="" loading="lazy" />
         <header>
           <span>${escapeHtml(card.id)}</span>
           <strong>${escapeHtml(card.title)}</strong>
@@ -789,6 +1027,7 @@
         <p>${formatText(card.playerText)}</p>
         ${card.detail ? `<p class="evidence-detail"><strong>관찰 메모</strong>${formatText(card.detail)}</p>` : ""}
         ${card.boardHint ? `<p class="deduction-note"><strong>대조 포인트</strong>${escapeHtml(card.boardHint)}</p>` : ""}
+        ${renderEvidenceVisual(card)}
         <div class="tag-row">
           ${card.tags.map((tag) => `<small>${escapeHtml(tag)}</small>`).join("")}
           ${suspectTags.map((tag) => `<small>${escapeHtml(tag)}</small>`).join("")}
@@ -798,10 +1037,86 @@
     `;
   }
 
+  function renderInterviewStatus(suspect) {
+    const related = discoveredCards().filter((card) => card.implicates.includes(suspect.id) || card.clears.includes(suspect.id));
+    const pressureCount = related.filter((card) => card.implicates.includes(suspect.id)).length;
+    const clearingCount = related.filter((card) => card.clears.includes(suspect.id)).length;
+    const status = state.cleared.has(suspect.id) ? "검증 완료" : related.length ? "대조 진행 중" : "공개 진술 단계";
+    return `
+      <div class="interview-status-grid" aria-label="심문 진행 요약">
+        <div>
+          <span>검증 상태</span>
+          <strong>${escapeHtml(status)}</strong>
+        </div>
+        <div>
+          <span>관련 증거</span>
+          <strong>${related.length}개 확보</strong>
+        </div>
+        <div>
+          <span>의혹 / 해소</span>
+          <strong>${pressureCount} / ${clearingCount}</strong>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderConflictPanel(suspect) {
+    const conflicts = suspect.conflicts || [];
+    if (!conflicts.length) return "";
+    return `
+      <section class="conflict-panel" aria-label="인물 간 갈등 관계">
+        <h3>갈등 관계</h3>
+        <ul class="conflict-list">
+          ${conflicts.map((item) => {
+            const evidence = item.evidence ? evidenceById.get(item.evidence) : null;
+            const revealed = Boolean(item.evidence && state.discovered.has(item.evidence));
+            return `
+              <li>
+                <span>${escapeHtml(item.with)}</span>
+                <p>${escapeHtml(revealed ? item.revealed : item.public)}</p>
+                ${revealed && evidence ? `<small>확인 단서: ${escapeHtml(evidence.title)}</small>` : ""}
+              </li>
+            `;
+          }).join("")}
+        </ul>
+      </section>
+    `;
+  }
+
+  function interviewEvidenceCards(suspect, answers) {
+    const reactionIds = new Set(Object.keys(answers.reactions || {}));
+    return discoveredCards().filter(
+      (card) => card.implicates.includes(suspect.id) || card.clears.includes(suspect.id) || reactionIds.has(card.id),
+    );
+  }
+
+  function fallbackEvidenceReaction(suspect, card) {
+    if (!card) return "";
+    if (card.clears.includes(suspect.id)) {
+      return "그 증거라면 제 주장을 다시 확인할 수 있을 겁니다. 의심과 방어 단서를 따로 놓고 봐 주세요.";
+    }
+    if (card.implicates.includes(suspect.id)) {
+      return "수상해 보일 수 있다는 건 압니다. 하지만 그 증거만으로 제 위치와 행동이 모두 설명되지는 않습니다.";
+    }
+    return "그 증거가 제 이야기와 어떻게 맞물리는지 추리 보드에서 다시 대조해 주세요.";
+  }
+
+  function evidenceReactionFollowUp(card) {
+    const axis = ((card?.supports || card?.tags || []).slice(0, 2).join(" / ")) || "관련";
+    return `추리 보드에서 ${axis} 축과 맞물리는 다른 단서를 다시 대조하세요.`;
+  }
+
   function renderSuspects() {
     const active = suspectById.get(state.activeSuspect) || data.SUSPECTS[0];
     const answers = data.QUESTIONS[active.id] || {};
-    const reaction = state.interviewEvidence ? answers.reactions?.[state.interviewEvidence] : "";
+    const evidenceOptions = interviewEvidenceCards(active, answers);
+    const presentedCard = state.interviewEvidence ? evidenceById.get(state.interviewEvidence) : null;
+    const reaction = state.interviewEvidence
+      ? answers.reactions?.[state.interviewEvidence] || fallbackEvidenceReaction(active, presentedCard)
+      : "";
+    const verificationText = state.cleared.has(active.id)
+      ? "의혹이 해소되었습니다. 최종 조건에 반영됩니다."
+      : "관련 증거 수와 의혹/해소 비율을 위 표에서 대조하세요.";
     return `
       <div class="suspect-layout" id="suspectView">
         <aside class="suspect-list">
@@ -820,10 +1135,12 @@
             <span>공개 진술</span>
             <span>${escapeHtml(active.role)}</span>
           </div>
+          ${renderInterviewStatus(active)}
           <dl class="case-dl">
             <dt>주장 알리바이</dt><dd>${escapeHtml(active.claimedAlibi)}</dd>
-            <dt>검증 상태</dt><dd>아직 증거로 검증되지 않았습니다.</dd>
+            <dt>검증 상태</dt><dd>${escapeHtml(verificationText)}</dd>
           </dl>
+          ${renderConflictPanel(active)}
           <div class="question-row">
             ${["base", "alibi", "relationship"].map((mode) => `
               <button type="button" class="${state.interviewMode === mode ? "is-active" : ""}" data-action="ask" data-mode="${mode}">
@@ -835,16 +1152,37 @@
           <div class="evidence-presenter">
             <h3>증거 제시</h3>
             <div class="chip-grid">
-              ${discoveredCards().filter((card) => card.implicates.includes(active.id) || card.clears.includes(active.id)).map((card) => `
+              ${evidenceOptions.map((card) => `
                 <button type="button" class="${state.interviewEvidence === card.id ? "is-active" : ""}" data-action="present-evidence" data-evidence="${card.id}">
                   ${escapeHtml(card.id)} · ${escapeHtml(card.title)}
                 </button>
               `).join("") || `<span class="empty-note">제시할 관련 증거가 아직 없습니다.</span>`}
             </div>
             ${reaction ? `<p class="reaction-text">${escapeHtml(reaction)}</p>` : ""}
+            ${reaction && presentedCard ? `<p class="follow-up-note">${escapeHtml(evidenceReactionFollowUp(presentedCard))}</p>` : ""}
           </div>
         </section>
       </div>
+    `;
+  }
+
+  function renderBoardAxisLanes() {
+    const cards = discoveredCards();
+    return `
+      <section class="board-axis-lanes" aria-label="추리축별 증거 묶음">
+        ${BOARD_AXIS_LANES.map((axis) => {
+          const axisCards = cards.filter((card) => axis.tags.some((tag) => card.tags.includes(tag) || card.supports.includes(tag))).slice(0, 4);
+          return `
+            <article class="board-axis-lane">
+              <span>${escapeHtml(axis.title)}</span>
+              <p>${escapeHtml(axis.note)}</p>
+              <div>
+                ${axisCards.map((card) => `<small>${escapeHtml(card.id)} · ${escapeHtml(card.title)}</small>`).join("") || `<small>관련 증거를 더 확보하세요.</small>`}
+              </div>
+            </article>
+          `;
+        }).join("")}
+      </section>
     `;
   }
 
@@ -863,6 +1201,8 @@
             <button type="button" class="primary-action" data-action="submit-board">연결 검증</button>
           </div>
           ${state.boardFeedback ? `<p class="board-feedback ${state.boardFeedback.tone === "wrong" ? "wrong-feedback" : ""}" role="status" aria-live="polite">${escapeHtml(state.boardFeedback.text)}</p>` : ""}
+          ${renderClueFlowPanel()}
+          ${renderBoardAxisLanes()}
           <div class="board-evidence-list">
             ${discoveredCards().map((card) => `
               <label class="board-chip ${state.selected.has(card.id) ? "is-selected" : ""} ${state.newlyAdded.has(card.id) ? "is-new" : ""}">
@@ -918,6 +1258,24 @@
     `;
   }
 
+  function finalReviewItems(result) {
+    const rows = [
+      ["culprit", "범인", "관계자 선택과 핵심 추리가 같은 방향을 가리키는지 확인하세요."],
+      ["time", "시간", "경보 시각과 실제 행동 시각을 분리해 보세요."],
+      ["method", "수단", "케이스 접근과 센서 조건을 한 문장 안에서 함께 설명해야 합니다."],
+      ["staging", "경보", "경보가 왜 늦게 보였는지, 어디서 조작됐는지 보강하세요."],
+      ["hidden", "은닉", "사라진 물건이 어디로 이동했는지 물건 흐름으로 좁히세요."],
+      ["motive", "동기", "관계 문서와 금전 압박이 같은 인물에게 모이는지 확인하세요."],
+      ["evidence", "증거", "최종 고발을 뒷받침하는 핵심 증거를 더 고르세요."],
+    ];
+    return rows.map(([key, label, help]) => ({
+      key,
+      label,
+      help,
+      ok: Boolean(result.checks?.[key]),
+    }));
+  }
+
   function renderFinal() {
     const ready = finalReady();
     if (!ready) {
@@ -929,6 +1287,8 @@
         </section>
       `;
     }
+    const draft = state.finalDraft || {};
+    const draftEvidence = new Set(draft.evidence || []);
     return `
       <section class="final-layout" id="finalView">
         <div class="final-brief">
@@ -947,41 +1307,44 @@
             <span>범인</span>
             <select name="culprit">
               <option value="">선택</option>
-              ${data.SUSPECTS.map((suspect) => `<option value="${suspect.id}">${escapeHtml(suspect.name)}</option>`).join("")}
+              ${data.SUSPECTS.map((suspect) => `
+                <option value="${suspect.id}" ${draft.culprit === suspect.id ? "selected" : ""}>${escapeHtml(suspect.name)}</option>
+              `).join("")}
             </select>
           </label>
           <label>
             <span>진짜 범행 시각</span>
             <select name="trueTime">
               <option value="">선택</option>
-              <option value="21:08">21:08</option>
-              <option value="21:17">21:17</option>
-              <option value="21:21">21:21</option>
+              ${["21:08", "21:17", "21:21"].map((time) => `
+                <option value="${time}" ${draft.trueTime === time ? "selected" : ""}>${time}</option>
+              `).join("")}
             </select>
           </label>
           <label>
             <span>도난 수단</span>
-            <textarea name="method"></textarea>
+            <textarea name="method">${escapeHtml(draft.method || "")}</textarea>
           </label>
           <label>
             <span>경보 조작</span>
-            <textarea name="staging"></textarea>
+            <textarea name="staging">${escapeHtml(draft.staging || "")}</textarea>
           </label>
           <label>
             <span>은닉 장소</span>
-            <textarea name="hidden"></textarea>
+            <textarea name="hidden">${escapeHtml(draft.hidden || "")}</textarea>
           </label>
           <label>
             <span>동기</span>
-            <textarea name="motive"></textarea>
+            <textarea name="motive">${escapeHtml(draft.motive || "")}</textarea>
           </label>
           <div class="final-evidence-pool">
             ${data.FINAL_ACCUSATION.requiredEvidencePool.map((id) => {
               const card = evidenceById.get(id);
               const unlocked = state.discovered.has(id);
+              const checked = unlocked && draftEvidence.has(id);
               return `
                 <label class="${unlocked ? "" : "is-locked"}">
-                  <input type="checkbox" data-final-evidence value="${id}" ${unlocked ? "" : "disabled"} />
+                  <input type="checkbox" data-final-evidence value="${id}" ${unlocked ? "" : "disabled"} ${checked ? "checked" : ""} />
                   <span>${escapeHtml(id)} · ${escapeHtml(card?.title || id)}</span>
                 </label>
               `;
@@ -1013,6 +1376,20 @@
             <span class="${result.checks?.[key] ? "is-solved" : ""}">${escapeHtml(label)}</span>
           `).join("")}
         </div>
+        ${result.accepted ? "" : `
+          <ul class="final-review-list">
+            ${finalReviewItems(result).filter((item) => !item.ok).map((item) => `
+              <li>
+                <span>${escapeHtml(item.label)}</span>
+                <p>${escapeHtml(item.help)}</p>
+              </li>
+            `).join("")}
+          </ul>
+          <div class="final-review-actions">
+            <button type="button" data-action="compass-view" data-view="notebook">증거 노트로 돌아가기</button>
+            <button type="button" data-action="compass-view" data-view="board">추리 보드 재검토</button>
+          </div>
+        `}
       </article>
     `;
   }
@@ -1050,8 +1427,9 @@
   }
 
   function publicInterviewAnswer(suspect, mode) {
+    const answers = data.QUESTIONS[suspect.id] || {};
+    if (answers[mode]) return answers[mode];
     if (mode === "alibi") return suspect.claimedAlibi;
-    if (mode === "relationship") return "관계 진술은 증거와 대조한 뒤 판단하세요.";
     return "현재 공개된 진술은 검증 전입니다. 주장 알리바이를 먼저 확인하고 현장 증거와 대조하세요.";
   }
 
@@ -1086,7 +1464,12 @@
     }
 
     if (action === "set-view") setView(actionEl.dataset.view);
+    if (action === "compass-view") setView(actionEl.dataset.view);
     if (action === "set-location") {
+      state.activeLocation = actionEl.dataset.location;
+      state.activeView = "scene";
+    }
+    if (action === "compass-location") {
       state.activeLocation = actionEl.dataset.location;
       state.activeView = "scene";
     }
@@ -1148,6 +1531,10 @@
     if (target.id === "teamNameInput") state.teamName = target.value;
   }
 
+  function testModeEnabled() {
+    return window.__CRIMESCENE_TEST_MODE__ === true;
+  }
+
   function installTestHooks() {
     window.gameTestApi = {
       snapshot() {
@@ -1207,19 +1594,7 @@
         return { result, snapshot: this.snapshot() };
       },
       submitFinal(payload = {}) {
-        const result = submitFinalPayload(
-          {
-            culprit: "seoyun",
-            trueTime: "21:08",
-            method: "복제 마스터 카드로 케이스를 열고 자석 센서 장치로 운석 도난 시간을 숨겼다.",
-            staging: "조정실에서 낚시줄을 원격으로 당겨 21:17 경보가 늦게 울리게 했다.",
-            hidden: "별자리 지도 보관통을 장비 상자 안에 숨겼다.",
-            motive: "아버지의 발견을 표절당했다는 원한과 빚, 돈 문제가 겹쳤다.",
-            evidence: data.FINAL_ACCUSATION.requiredEvidencePool.slice(0, 6),
-            ...payload,
-          },
-          false,
-        );
+        const result = submitFinalPayload(payload, false);
         render();
         return { result, snapshot: this.snapshot() };
       },
@@ -1231,6 +1606,6 @@
   app.addEventListener("click", handleClick);
   app.addEventListener("change", handleChange);
   app.addEventListener("input", handleInput);
-  installTestHooks();
+  if (testModeEnabled()) installTestHooks();
   render();
 })();
