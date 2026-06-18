@@ -968,6 +968,34 @@ p {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
+.flow-card[data-action="toggle-board-evidence"] {
+  opacity: 0.55;
+  transition: opacity 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.flow-card[data-action="toggle-board-evidence"]:hover {
+  opacity: 0.85;
+}
+
+.flow-card[data-action="toggle-board-evidence"].is-selected {
+  opacity: 1 !important;
+  border: 2px solid var(--teal-neon) !important;
+  background: rgba(0, 242, 254, 0.18) !important;
+  box-shadow: 0 0 25px var(--teal-glow) !important;
+}
+
+.flow-card[data-action="toggle-board-evidence"].is-selected > span {
+  border-color: var(--teal-neon) !important;
+  background: rgba(0, 242, 254, 0.25) !important;
+  box-shadow: 0 0 12px var(--teal-glow) !important;
+}
+
+.flow-card.is-selected {
+  border-color: var(--teal-neon) !important;
+  background: rgba(0, 242, 254, 0.18) !important;
+  box-shadow: 0 0 25px var(--teal-glow) !important;
+}
+
 .flow-card > span {
   display: grid;
   place-items: center;
@@ -1912,9 +1940,13 @@ blockquote {
   font-size: 11px;
 }
 
-.board-chip p {
+.board-chip-details {
   grid-area: hint;
   margin: 6px 0 0;
+}
+
+.board-chip-details p {
+  margin: 0;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
@@ -2031,6 +2063,72 @@ blockquote {
 .final-evidence-pool .is-locked {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+.final-form-row,
+.final-section,
+.final-form .primary-action {
+  grid-column: 1 / -1;
+}
+
+.final-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  margin-top: 8px;
+}
+
+.final-section-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--brass);
+}
+
+.final-section-desc {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 4px 0;
+}
+
+.evidence-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.evidence-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: rgba(10, 14, 26, 0.4);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12.5px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.evidence-chip:hover {
+  border-color: var(--brass);
+  color: #fff;
+  background: rgba(201, 147, 62, 0.05);
+}
+
+.evidence-chip input[type="checkbox"] {
+  display: none;
+}
+
+.evidence-chip:has(input[type="checkbox"]:checked) {
+  background: rgba(201, 147, 62, 0.15);
+  border-color: var(--brass);
+  color: var(--brass);
+  font-weight: 600;
+  box-shadow: 0 0 8px rgba(201, 147, 62, 0.25);
 }
 
 .score-card {
@@ -2313,4 +2411,263 @@ blockquote {
     width: 94px;
     font-size: 12px;
   }
+}
+
+/* 수사 진행 가이드 스타일 */
+.investigation-steps-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  padding: 28px;
+  margin-bottom: 24px;
+  box-shadow: 0 16px 36px var(--shadow);
+}
+
+.investigation-steps-card .panel-heading {
+  margin-bottom: 24px;
+}
+
+.investigation-steps-card .guide-subtitle {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.steps-flow-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 4px;
+  width: 100%;
+}
+
+.step-flow-item {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid rgba(201, 147, 62, 0.15);
+  border-radius: 8px;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.25s ease-in-out;
+  min-height: 140px;
+}
+
+.step-flow-item:hover {
+  border-color: var(--line-strong);
+  background: rgba(201, 147, 62, 0.04);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.step-num {
+  font-family: "Orbitron", sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--brass);
+  text-shadow: 0 0 10px var(--brass-glow);
+  line-height: 1;
+}
+
+.step-content h3 {
+  font-size: 13.5px;
+  color: var(--ink);
+  margin: 0 0 4px 0;
+  font-weight: 700;
+}
+
+.step-content p {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.step-flow-arrow {
+  color: var(--brass);
+  font-size: 18px;
+  font-weight: bold;
+  opacity: 0.5;
+  user-select: none;
+  flex-shrink: 0;
+  padding: 0 4px;
+}
+
+@media (max-width: 1024px) {
+  .steps-flow-container {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .step-flow-arrow {
+    text-align: center;
+    transform: rotate(90deg);
+    margin: 4px 0;
+    padding: 0;
+  }
+  .step-flow-item {
+    min-height: auto;
+  }
+}
+
+/* 획득된 심문 기록 (용의자 반응) 스타일 */
+.evidence-card .unlocked-reactions {
+  margin-top: 12px;
+  background: rgba(0, 242, 254, 0.03);
+  border-left: 2.5px solid var(--teal-neon);
+  border-radius: 4px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.evidence-card .unlocked-reaction strong {
+  display: block;
+  color: var(--teal-neon);
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.evidence-card .unlocked-reaction p {
+  margin: 0;
+  color: #fff;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.board-chip .unlocked-reactions {
+  margin-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.board-chip .unlocked-reaction strong {
+  display: inline;
+  color: var(--teal-neon);
+  font-size: 11px;
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.board-chip .unlocked-reaction p {
+  display: inline;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* 최종 고발장 R1-R8 선택 버튼 스타일 */
+.final-check-btn {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.03);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.final-check-btn:hover {
+  border-color: var(--line-strong);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.final-check-btn.is-solved {
+  border-color: rgba(74, 222, 128, 0.35);
+  background: rgba(74, 222, 128, 0.08);
+  color: #86efac;
+}
+
+.final-check-btn.is-solved:hover {
+  border-color: rgba(74, 222, 128, 0.55);
+  background: rgba(74, 222, 128, 0.15);
+  color: #a7f3d0;
+}
+
+.final-check-btn.active {
+  border-color: var(--teal-neon);
+  background: rgba(0, 242, 254, 0.12);
+  color: var(--teal-neon);
+  box-shadow: 0 0 10px var(--teal-glow);
+}
+
+.final-check-btn.is-solved.active {
+  border-color: var(--green);
+  background: rgba(74, 222, 128, 0.15);
+  color: #86efac;
+  box-shadow: 0 0 10px rgba(74, 222, 128, 0.25);
+}
+
+.final-rule-info {
+  margin-top: 14px;
+  min-height: 80px;
+}
+
+.rule-info-card {
+  padding: 14px;
+  border-radius: 8px;
+  background: rgba(13, 19, 35, 0.65);
+  border: 1px solid var(--line);
+  transition: all 0.25s ease;
+}
+
+.rule-info-card.is-unsolved {
+  border-left: 3px solid var(--red);
+}
+
+.rule-info-card.is-solved {
+  border-left: 3px solid var(--green);
+}
+
+.rule-info-card strong {
+  display: block;
+  font-size: 13px;
+  color: #fff;
+  margin-bottom: 6px;
+}
+
+.rule-info-card .status-badge {
+  font-size: 11px;
+  font-weight: 700;
+  margin: 2px 0 10px;
+}
+
+.rule-info-card.is-unsolved .status-badge {
+  color: var(--red);
+}
+
+.rule-info-card.is-solved .status-badge {
+  color: #86efac;
+}
+
+.rule-info-card .result-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+
+.rule-info-card .evidence-list {
+  display: block;
+  font-size: 10px;
+  color: rgba(201, 147, 62, 0.55);
 }

@@ -186,7 +186,7 @@
       round: "round2 / late",
       sceneState: "오래된 관측 기록과 행정 문서가 보관되어 있다.",
       visualRole: "동기와 관계 갈등 강화",
-      evidenceIds: ["E04", "E10", "E21", "E22"],
+      evidenceIds: ["E04", "E09", "E10", "E21", "E22"],
       coordinates: [26, 28],
     },
   ];
@@ -411,11 +411,13 @@
   const FINAL_ACCUSATION = {
     culprit: "seoyun",
     trueTime: "21:08",
-    requiredEvidencePool: ["E14", "E15", "E16", "E17", "E18", "E19", "E20", "E21", "E22", "E23"],
-    methodTerms: ["복제", "마스터", "자석", "센서", "운석"],
-    stagingTerms: ["경보", "낚시줄", "조정실", "지연", "원격"],
-    hiddenTerms: ["보관통", "장비", "상자", "별자리"],
-    motiveTerms: ["아버지", "표절", "발견", "빚", "돈"],
+    answers: {
+      method: ["E01", "E10"],
+      staging: ["E02", "E18", "E19", "E20"],
+      hidden: ["E16", "E17", "E23"],
+      motive: ["E04", "E22"],
+      evidence: ["E24"],
+    }
   };
 
   const HINTS = [
@@ -469,12 +471,13 @@
       badge,
       claimedAlibi,
     })),
-    LOCATIONS: LOCATIONS.map(({ id, name, shortName, round, sceneState, coordinates }) => ({
+    LOCATIONS: LOCATIONS.map(({ id, name, shortName, round, sceneState, evidenceIds, coordinates }) => ({
       id,
       name,
       shortName,
       round,
       sceneState,
+      evidenceIds: Array.from(evidenceIds || []),
       coordinates,
     })),
     EVIDENCE: EVIDENCE.map(({ id, location, round, tags }) => ({ id, location, round, tags })),

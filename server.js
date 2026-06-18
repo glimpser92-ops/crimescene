@@ -25,7 +25,14 @@ app.get("/healthz", (_req, res) => {
   res.json({ ok: true, app: "crime-scene-investigation" });
 });
 
-app.use(express.static(PUBLIC_DIR, { extensions: ["html"] }));
+app.use(express.static(PUBLIC_DIR, {
+  extensions: ["html"],
+  setHeaders: (res, path) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+  }
+}));
 
 app.use((_req, res) => {
   res.status(404).send("Not found");

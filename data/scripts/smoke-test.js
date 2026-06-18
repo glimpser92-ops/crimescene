@@ -11,11 +11,11 @@ const requestedBaseUrl = process.env.BASE_URL || "";
 const correctFinalPayload = {
   culprit: "seoyun",
   trueTime: "21:08",
-  method: "복제 마스터 카드로 케이스를 열고 자석 센서 장치로 운석 도난 시간을 숨겼다.",
-  staging: "조정실에서 낚시줄을 원격으로 당겨 21:17 경보가 늦게 울리게 했다.",
-  hidden: "별자리 지도 보관통을 장비 상자 안에 숨겼다.",
-  motive: "아버지의 발견을 표절당했다는 원한과 빚, 돈 문제가 겹쳤다.",
-  evidence: ["E14", "E18", "E20", "E21", "E23", "E24"],
+  methodEvidence: ["E01", "E10"],
+  stagingEvidence: ["E02", "E18", "E19", "E20"],
+  hiddenEvidence: ["E16", "E17", "E23"],
+  motiveEvidence: ["E04", "E22"],
+  evidence: ["E24"],
 };
 
 function getFreePort() {
@@ -531,10 +531,10 @@ async function startServer() {
     await page.evaluate(() => window.gameTestApi.setView("final"));
     const nearMiss = await page.evaluate(() =>
       window.gameTestApi.submitFinal({
-        method: "케이스를 열었다.",
-        staging: "경보가 울렸다.",
-        hidden: "어딘가에 숨겼다.",
-        motive: "돈 문제였다.",
+        methodEvidence: ["E01"],
+        stagingEvidence: ["E02"],
+        hiddenEvidence: ["E16"],
+        motiveEvidence: ["E04"],
         evidence: ["E14"],
       }),
     );
@@ -542,13 +542,13 @@ async function startServer() {
     const nearMissFeedback = await page.evaluate(() => ({
       rows: document.querySelectorAll(".final-review-list li").length,
       actions: document.querySelectorAll(".final-review-actions button").length,
-      methodValue: document.querySelector('[name="method"]')?.value || "",
+      methodChecked: document.querySelector('[data-final-method-evidence][value="E01"]')?.checked || false,
       text: document.querySelector("#finalView")?.textContent || "",
     }));
     assert(nearMissFeedback.rows >= 3, "near-miss final feedback should list category-level review items");
     assert(nearMissFeedback.text.includes("수단"), "near-miss final feedback should name weak reasoning categories");
     assert(nearMissFeedback.actions >= 2, "near-miss final feedback should offer recovery navigation");
-    assert.strictEqual(nearMissFeedback.methodValue, "케이스를 열었다.", "near-miss final form should preserve submitted method text");
+    assert.strictEqual(nearMissFeedback.methodChecked, true, "near-miss final form should preserve submitted method evidence selections");
     assert(!nearMissFeedback.text.includes("E20 + E23"), "near-miss final feedback should not reveal exact evidence bundles");
 
     const solved = await page.evaluate(() => {

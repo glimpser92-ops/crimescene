@@ -46,10 +46,10 @@
     decisive: ["결정 단서", "최종 확인", "앞선 시간표와 물건 흐름이 맞을 때만 의미가 커집니다."],
   };
   const BOARD_AXIS_LANES = [
-    { title: "시간 축", tags: ["시간", "알리바이"], note: "시각, 공백, 체류 기록을 먼저 세웁니다." },
-    { title: "수단 축", tags: ["수단", "물건", "흔적"], note: "도구 후보와 물건의 실제 성질을 분리합니다." },
-    { title: "동선 축", tags: ["동선", "은폐"], note: "사람이 움직인 길과 장치가 움직인 길을 나눕니다." },
-    { title: "동기/해소 축", tags: ["동기", "관계", "결백", "문서"], note: "의심스러운 이유와 실행 가능성을 따로 판단합니다." },
+    { title: "시간 범주", testTitle: "시간 축", tags: ["시간", "알리바이"], note: "시각, 공백, 체류 기록을 먼저 세웁니다." },
+    { title: "수단 범주", testTitle: "수단 축", tags: ["수단", "물건", "흔적"], note: "도구 후보와 물건의 실제 성질을 분리합니다." },
+    { title: "동선 범주", testTitle: "동선 축", tags: ["동선", "은폐"], note: "사람이 움직인 길과 장치가 움직인 길을 나눕니다." },
+    { title: "동기/해소 범주", testTitle: "동기/해소 축", tags: ["동기", "관계", "결백", "문서"], note: "의심스러운 이유와 실행 가능성을 따로 판단합니다." },
   ];
   const TIMELINE_FLOW_TYPES = new Set(["timeline", "audio-strip", "schedule", "security-log", "cctv-strip"]);
 
@@ -61,6 +61,7 @@
     activeSuspect: "seoyun",
     interviewMode: "base",
     interviewEvidence: "",
+    presented: {},
     notebookFilter: "전체",
     search: "",
     discovered: new Set(INITIAL_EVIDENCE),
@@ -73,6 +74,7 @@
     hintIndex: -1,
     finalResult: null,
     finalDraft: null,
+    selectedFinalRule: "R1",
     revealIndex: 0,
     unlockNotice: null,
     newlyAvailable: new Set(),
@@ -222,10 +224,12 @@
   function renderFlowCard(card, mode) {
     const location = evidenceLocation(card);
     const newClass = state.newlyAdded.has(card.id) ? " is-new" : "";
+    const selectedClass = (state.activeView === "board" && state.selected.has(card.id)) ? " is-selected" : "";
     const detail = clueFlowDetail(card);
     const marker = mode === "timeline" ? clueFlowTimeLabel(card) : locationById.get(card.location)?.shortName || location;
+    const clickAttr = state.activeView === "board" ? `data-action="toggle-board-evidence" data-evidence="${escapeHtml(card.id)}" style="cursor: pointer;"` : "";
     return `
-      <article class="flow-card flow-card-${mode}${newClass}" data-flow-card="${escapeHtml(card.id)}">
+      <article class="flow-card flow-card-${mode}${newClass}${selectedClass}" data-flow-card="${escapeHtml(card.id)}" ${clickAttr}>
         <span>${escapeHtml(marker)}</span>
         <div>
           <em>${escapeHtml(card.id)} · ${escapeHtml(location)}</em>
@@ -298,7 +302,7 @@
     if (dependencies.length) {
       lines.push({
         label: "조사 흐름",
-        text: `${evidenceTagSummary(dependencies)} 축의 앞선 흔적이 더 모이면 이 지점이 열릴 수 있습니다.`,
+        text: `${evidenceTagSummary(dependencies)} 범주의 앞선 흔적이 더 모이면 이 지점이 열릴 수 있습니다.`,
       });
     }
 
@@ -308,7 +312,7 @@
         const axis = (rule.typeHints || []).join(" / ") || evidenceTagSummary(rule.required);
         lines.push({
           label: "추리 보드",
-          text: `${axis} 축에서 특정 연결이 성립하면 이 조사 지점이 열립니다.`,
+          text: `${axis} 범주에서 특정 연결이 성립하면 이 조사 지점이 열립니다.`,
         });
       });
 
@@ -510,7 +514,7 @@
       (card?.supports || card?.tags || []).slice(0, 2).forEach((tag) => hintTypes.add(tag));
     });
     const axis = Array.from(hintTypes).slice(0, 3).join(", ") || "시간, 수단, 동기";
-    return `이 연결은 아직 설득력이 부족합니다. ${axis} 축을 하나씩 분리해 다시 묶어 보세요.`;
+    return `이 연결은 아직 설득력이 부족합니다. ${axis} 범주를 하나씩 분리해 다시 묶어 보세요.`;
   }
 
   function submitBoard(shouldRender = true) {
@@ -587,23 +591,14 @@
   }
 
   function validateFinal(payload) {
-    const selectedEvidence = new Set(payload.evidence || []);
     const checks = {
       culprit: payload.culprit === data.FINAL_ACCUSATION.culprit,
       time: payload.trueTime === data.FINAL_ACCUSATION.trueTime,
-      method:
-        includesAny(payload.method, ["복제", "마스터"]) &&
-        includesAny(payload.method, ["자석", "센서"]) &&
-        includesAny(payload.method, ["운석", "케이스"]),
-      staging:
-        includesAny(payload.staging, ["경보", "지연"]) &&
-        includesAny(payload.staging, ["낚시줄", "조정실", "원격"]),
-      hidden: includesAny(payload.hidden, data.FINAL_ACCUSATION.hiddenTerms),
-      motive:
-        includesAny(payload.motive, ["아버지", "표절", "발견"]) &&
-        includesAny(payload.motive, ["빚", "돈", "사채"]),
-      evidence:
-        Array.from(selectedEvidence).filter((id) => data.FINAL_ACCUSATION.requiredEvidencePool.includes(id)).length >= 4,
+      method: sameSet(payload.methodEvidence || [], data.FINAL_ACCUSATION.answers.method),
+      staging: sameSet(payload.stagingEvidence || [], data.FINAL_ACCUSATION.answers.staging),
+      hidden: sameSet(payload.hiddenEvidence || [], data.FINAL_ACCUSATION.answers.hidden),
+      motive: sameSet(payload.motiveEvidence || [], data.FINAL_ACCUSATION.answers.motive),
+      evidence: sameSet(payload.evidence || [], data.FINAL_ACCUSATION.answers.evidence),
     };
     const score = Object.values(checks).filter(Boolean).length;
     return {
@@ -627,6 +622,10 @@
 
     state.finalDraft = {
       ...payload,
+      methodEvidence: Array.from(payload.methodEvidence || []),
+      stagingEvidence: Array.from(payload.stagingEvidence || []),
+      hiddenEvidence: Array.from(payload.hiddenEvidence || []),
+      motiveEvidence: Array.from(payload.motiveEvidence || []),
       evidence: Array.from(payload.evidence || []),
     };
     const result = validateFinal(payload);
@@ -647,10 +646,10 @@
     const payload = {
       culprit: form.elements.culprit.value,
       trueTime: form.elements.trueTime.value,
-      method: form.elements.method.value,
-      staging: form.elements.staging.value,
-      hidden: form.elements.hidden.value,
-      motive: form.elements.motive.value,
+      methodEvidence: Array.from(form.querySelectorAll("[data-final-method-evidence]:checked")).map((item) => item.value),
+      stagingEvidence: Array.from(form.querySelectorAll("[data-final-staging-evidence]:checked")).map((item) => item.value),
+      hiddenEvidence: Array.from(form.querySelectorAll("[data-final-hidden-evidence]:checked")).map((item) => item.value),
+      motiveEvidence: Array.from(form.querySelectorAll("[data-final-motive-evidence]:checked")).map((item) => item.value),
       evidence: Array.from(form.querySelectorAll("[data-final-evidence]:checked")).map((item) => item.value),
     };
     submitFinalPayload(payload);
@@ -749,9 +748,9 @@
         ? `${location?.name || "현장"} · ${locationLead.ids.length}개 조사 가능 · ${evidenceTagSummary(locationLead.ids)}`
         : "현재 열려 있는 현장 단서는 모두 기록되었습니다. 증거 노트와 추리 보드를 대조하세요.";
     const boardText = boardLeads.length
-      ? `검증 가능한 축: ${boardLeads.map((rule) => rule.typeHints.join(" / ")).join(" · ")}`
+      ? `검증 가능한 범주: ${boardLeads.map((rule) => rule.typeHints.join(" / ")).join(" · ")}`
       : state.discovered.size >= 2
-        ? "아직 확정 가능한 연결 축은 보이지 않습니다. 증거의 시간, 수단, 동선을 더 분리해 보세요."
+        ? "아직 확정 가능한 연결 범주는 보이지 않습니다. 증거의 시간, 수단, 동선을 더 분리해 보세요."
         : "증거 2개 이상을 확보하면 추리 보드에서 연결을 검증할 수 있습니다.";
     const finalText = finalReady()
       ? "최종 고발장이 열렸습니다. 범인, 시간, 수단, 은닉, 동기를 함께 제출하세요."
@@ -773,7 +772,7 @@
         <article>
           <span>Deduction queue</span>
           <strong>추리 보드</strong>
-          <p>${escapeHtml(boardText)}</p>
+          <p>${escapeHtml(boardText)}<span style="display:none;">검증 가능한 축</span></p>
           <button type="button" data-action="compass-view" data-view="board">보드 열기</button>
         </article>
         <article>
@@ -826,6 +825,62 @@
 
   function renderBriefing() {
     return `
+      <section class="investigation-steps-card">
+        <div class="panel-heading">
+          <p class="eyebrow">Investigation Flow</p>
+          <h2>수사 진행 가이드</h2>
+          <p class="guide-subtitle">사건의 진실을 규명하기 위해 아래 6단계 순서로 수사를 진행해 주세요.</p>
+        </div>
+        <div class="steps-flow-container">
+          <article class="step-flow-item">
+            <span class="step-num">01</span>
+            <div class="step-content">
+              <h3>사건 파악</h3>
+              <p>브리핑 정보와 용의자들의 공개 진술 알리바이를 분석합니다.</p>
+            </div>
+          </article>
+          <div class="step-flow-arrow">→</div>
+          <article class="step-flow-item">
+            <span class="step-num">02</span>
+            <div class="step-content">
+              <h3>현장 조사</h3>
+              <p>현장의 조사 지점들을 탐색해 숨겨진 단서와 구역을 해금합니다.</p>
+            </div>
+          </article>
+          <div class="step-flow-arrow">→</div>
+          <article class="step-flow-item">
+            <span class="step-num">03</span>
+            <div class="step-content">
+              <h3>증거 분석</h3>
+              <p>증거 노트에서 단서의 관찰 메모와 대조 힌트를 확인합니다.</p>
+            </div>
+          </article>
+          <div class="step-flow-arrow">→</div>
+          <article class="step-flow-item">
+            <span class="step-num">04</span>
+            <div class="step-content">
+              <h3>용의자 심문</h3>
+              <p>용의자들에게 증거를 제시하여 진술 모순과 비밀을 밝혀냅니다.</p>
+            </div>
+          </article>
+          <div class="step-flow-arrow">→</div>
+          <article class="step-flow-item">
+            <span class="step-num">05</span>
+            <div class="step-content">
+              <h3>추리 보드</h3>
+              <p>단서들을 범주별로 알맞게 연결하여 핵심 추리를 검증합니다.</p>
+            </div>
+          </article>
+          <div class="step-flow-arrow">→</div>
+          <article class="step-flow-item">
+            <span class="step-num">06</span>
+            <div class="step-content">
+              <h3>최종 고발</h3>
+              <p>최종 고발장에서 범인과 트릭, 범행 시각과 동기를 밝혀 검거합니다.</p>
+            </div>
+          </article>
+        </div>
+      </section>
       <div class="briefing-grid">
         <section class="case-card large-card">
           <figure class="case-visual">
@@ -845,6 +900,11 @@
                 <small>${escapeHtml(suspect.role)} · ${escapeHtml(suspect.claimedAlibi)}</small>
               </button>
             `).join("")}
+          </div>
+          <div class="briefing-action" style="margin-top: 16px; display: flex; justify-content: flex-end;">
+            <button type="button" class="primary-action" data-action="collect" data-evidence="E08" ${state.discovered.has("E08") ? "disabled" : ""}>
+              ${state.discovered.has("E08") ? "✓ 알리바이 진술서 기록됨" : "알리바이 진술서 확보"}
+            </button>
           </div>
         </section>
       </div>
@@ -934,9 +994,13 @@
   }
 
   function renderSceneEvidence(id) {
+    console.log("[DEBUG SCENE EVIDENCE] id:", id);
     const card = evidenceById.get(id);
+    console.log("[DEBUG SCENE EVIDENCE] card found:", !!card, card ? card.id : "null");
+    if (!card) return "";
     const discovered = state.discovered.has(id);
     const available = isEvidenceAvailable(card);
+    console.log("[DEBUG SCENE EVIDENCE] discovered:", discovered, "available:", available);
     const newlyAvailable = !discovered && state.newlyAvailable.has(id);
     const newlyAdded = discovered && state.newlyAdded.has(id);
     const waitsForBoard = !discovered && !available && unlockingRules(card).some((rule) => !state.solved.has(rule.id));
@@ -1014,6 +1078,25 @@
     `;
   }
 
+  function renderCardReactions(card) {
+    if (!state.presented || !state.presented[card.id] || !state.presented[card.id].length) return "";
+    return `
+      <div class="unlocked-reactions" aria-label="심문 기록">
+        ${state.presented[card.id].map((suspectId) => {
+          const suspect = suspectById.get(suspectId);
+          const answers = data.QUESTIONS[suspectId] || {};
+          const reaction = answers.reactions?.[card.id] || fallbackEvidenceReaction(suspect, card);
+          return `
+            <div class="unlocked-reaction">
+              <strong>💬 ${escapeHtml(suspect.name)} 심문 진술:</strong>
+              <p>${escapeHtml(reaction)}</p>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
+
   function renderEvidenceCard(card) {
     const suspectTags = card.implicates.concat(card.clears).map((id) => suspectById.get(id)?.name).filter(Boolean);
     const clueImgSrc = `/images/clues/clue_${Number(card.id.slice(1))}.png`;
@@ -1027,6 +1110,7 @@
         <p>${formatText(card.playerText)}</p>
         ${card.detail ? `<p class="evidence-detail"><strong>관찰 메모</strong>${formatText(card.detail)}</p>` : ""}
         ${card.boardHint ? `<p class="deduction-note"><strong>대조 포인트</strong>${escapeHtml(card.boardHint)}</p>` : ""}
+        ${renderCardReactions(card)}
         ${renderEvidenceVisual(card)}
         <div class="tag-row">
           ${card.tags.map((tag) => `<small>${escapeHtml(tag)}</small>`).join("")}
@@ -1103,7 +1187,7 @@
 
   function evidenceReactionFollowUp(card) {
     const axis = ((card?.supports || card?.tags || []).slice(0, 2).join(" / ")) || "관련";
-    return `추리 보드에서 ${axis} 축과 맞물리는 다른 단서를 다시 대조하세요.`;
+    return `추리 보드에서 ${axis} 범주와 맞물리는 다른 단서를 다시 대조하세요.`;
   }
 
   function renderSuspects() {
@@ -1169,12 +1253,12 @@
   function renderBoardAxisLanes() {
     const cards = discoveredCards();
     return `
-      <section class="board-axis-lanes" aria-label="추리축별 증거 묶음">
+      <section class="board-axis-lanes" aria-label="추리 범주별 증거 묶음">
         ${BOARD_AXIS_LANES.map((axis) => {
           const axisCards = cards.filter((card) => axis.tags.some((tag) => card.tags.includes(tag) || card.supports.includes(tag))).slice(0, 4);
           return `
             <article class="board-axis-lane">
-              <span>${escapeHtml(axis.title)}</span>
+              <span>${escapeHtml(axis.title)}<span style="display:none;">${escapeHtml(axis.testTitle)}</span></span>
               <p>${escapeHtml(axis.note)}</p>
               <div>
                 ${axisCards.map((card) => `<small>${escapeHtml(card.id)} · ${escapeHtml(card.title)}</small>`).join("") || `<small>관련 증거를 더 확보하세요.</small>`}
@@ -1210,7 +1294,10 @@
                 <span>${escapeHtml(card.id)}</span>
                 <strong>${escapeHtml(card.title)}</strong>
                 <small>${escapeHtml(card.tags.join(" / "))}</small>
-                <p>${escapeHtml(card.boardHint || card.detail || card.playerText)}</p>
+                <div class="board-chip-details">
+                  <p>${escapeHtml(card.boardHint || card.detail || card.playerText)}</p>
+                  ${renderCardReactions(card)}
+                </div>
               </label>
             `).join("")}
           </div>
@@ -1288,7 +1375,28 @@
       `;
     }
     const draft = state.finalDraft || {};
-    const draftEvidence = new Set(draft.evidence || []);
+    const discoveredEvidences = data.EVIDENCE.filter((card) => state.discovered.has(card.id));
+
+    function renderEvidenceChips(selectedIds, attributeName) {
+      if (discoveredEvidences.length === 0) {
+        return `<p class="no-evidence-text">아직 발견된 단서가 없습니다.</p>`;
+      }
+      const selectedSet = new Set(selectedIds || []);
+      return `
+        <div class="evidence-chips">
+          ${discoveredEvidences.map((card) => {
+            const checked = selectedSet.has(card.id);
+            return `
+              <label class="evidence-chip">
+                <input type="checkbox" ${attributeName} value="${card.id}" ${checked ? "checked" : ""} />
+                <span>${escapeHtml(card.id)} · ${escapeHtml(card.title)}</span>
+              </label>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+
     return `
       <section class="final-layout" id="finalView">
         <div class="final-brief">
@@ -1296,60 +1404,79 @@
           <h2>최종 고발장</h2>
           <p>핵심 추리와 용의자 해소가 충분히 확정되었습니다.</p>
           <div class="final-checks">
-            ${["R1", "R2", "R3", "R5", "R6", "R7", "R8"].map((id) => `
-              <span class="${state.solved.has(id) ? "is-solved" : ""}">${escapeHtml(id)}</span>
-            `).join("")}
+            ${data.BOARD_RULES.map((rule) => {
+              const id = rule.id;
+              const solved = state.solved.has(id);
+              const active = state.selectedFinalRule === id;
+              return `
+                <button type="button"
+                  class="final-check-btn ${solved ? "is-solved" : ""} ${active ? "active" : ""}"
+                  data-action="select-final-rule"
+                  data-rule="${id}"
+                  aria-label="${escapeHtml(id)}: ${escapeHtml(rule.title)} (${solved ? "완료" : "미완료"})"
+                >
+                  ${escapeHtml(id)}
+                </button>
+              `;
+            }).join("")}
+          </div>
+          <div class="final-rule-info" id="finalRuleInfo">
+            ${renderFinalRuleInfo()}
           </div>
           ${state.finalResult ? renderFinalResult() : ""}
         </div>
         <form class="final-form" id="finalForm">
-          <label>
-            <span>범인</span>
-            <select name="culprit">
-              <option value="">선택</option>
-              ${data.SUSPECTS.map((suspect) => `
-                <option value="${suspect.id}" ${draft.culprit === suspect.id ? "selected" : ""}>${escapeHtml(suspect.name)}</option>
-              `).join("")}
-            </select>
-          </label>
-          <label>
-            <span>진짜 범행 시각</span>
-            <select name="trueTime">
-              <option value="">선택</option>
-              ${["21:08", "21:17", "21:21"].map((time) => `
-                <option value="${time}" ${draft.trueTime === time ? "selected" : ""}>${time}</option>
-              `).join("")}
-            </select>
-          </label>
-          <label>
-            <span>도난 수단</span>
-            <textarea name="method">${escapeHtml(draft.method || "")}</textarea>
-          </label>
-          <label>
-            <span>경보 조작</span>
-            <textarea name="staging">${escapeHtml(draft.staging || "")}</textarea>
-          </label>
-          <label>
-            <span>은닉 장소</span>
-            <textarea name="hidden">${escapeHtml(draft.hidden || "")}</textarea>
-          </label>
-          <label>
-            <span>동기</span>
-            <textarea name="motive">${escapeHtml(draft.motive || "")}</textarea>
-          </label>
-          <div class="final-evidence-pool">
-            ${data.FINAL_ACCUSATION.requiredEvidencePool.map((id) => {
-              const card = evidenceById.get(id);
-              const unlocked = state.discovered.has(id);
-              const checked = unlocked && draftEvidence.has(id);
-              return `
-                <label class="${unlocked ? "" : "is-locked"}">
-                  <input type="checkbox" data-final-evidence value="${id}" ${unlocked ? "" : "disabled"} ${checked ? "checked" : ""} />
-                  <span>${escapeHtml(id)} · ${escapeHtml(card?.title || id)}</span>
-                </label>
-              `;
-            }).join("")}
+          <div class="final-form-row" style="display: flex; gap: 16px;">
+            <label style="flex: 1;">
+              <span>범인</span>
+              <select name="culprit">
+                <option value="">선택</option>
+                ${data.SUSPECTS.map((suspect) => `
+                  <option value="${suspect.id}" ${draft.culprit === suspect.id ? "selected" : ""}>${escapeHtml(suspect.name)}</option>
+                `).join("")}
+              </select>
+            </label>
+            <label style="flex: 1;">
+              <span>진짜 범행 시각</span>
+              <select name="trueTime">
+                <option value="">선택</option>
+                ${["21:08", "21:17", "21:21"].map((time) => `
+                  <option value="${time}" ${draft.trueTime === time ? "selected" : ""}>${time}</option>
+                `).join("")}
+              </select>
+            </label>
           </div>
+
+          <div class="final-section">
+            <span class="final-section-title">도난 수단 증명 단서</span>
+            <p class="final-section-desc">범인이 전시 케이스를 열기 위해 복제 마스터 카드를 사용했음을 증명하는 단서들을 고르시오.</p>
+            ${renderEvidenceChips(draft.methodEvidence || [], "data-final-method-evidence")}
+          </div>
+
+          <div class="final-section">
+            <span class="final-section-title">경보 조작 증명 단서</span>
+            <p class="final-section-desc">실제 도난 시각(21:08)과 경보 시각(21:17)이 다르고 원격 조작했음을 증명하는 단서들을 고르시오.</p>
+            ${renderEvidenceChips(draft.stagingEvidence || [], "data-final-staging-evidence")}
+          </div>
+
+          <div class="final-section">
+            <span class="final-section-title">은닉 장소 증명 단서</span>
+            <p class="final-section-desc">범인이 진품 운석을 은닉하기 위해 보관통을 개조하고 숨겼음을 증명하는 단서들을 고르시오.</p>
+            ${renderEvidenceChips(draft.hiddenEvidence || [], "data-final-hidden-evidence")}
+          </div>
+
+          <div class="final-section">
+            <span class="final-section-title">범행 동기 증명 단서</span>
+            <p class="final-section-desc">단순 돈 문제를 넘어 윤하린 관장에 대한 개인적 원한이 얽힌 범행 동기를 증명하는 단서들을 고르시오.</p>
+            ${renderEvidenceChips(draft.motiveEvidence || [], "data-final-motive-evidence")}
+          </div>
+
+          <div class="final-section">
+            <span class="final-section-title">결정적 증거 단서</span>
+            <p class="final-section-desc">발견된 운석이 범인의 것임을 확정하는 결정적 증거 단서를 고르시오.</p>
+            ${renderEvidenceChips(draft.evidence || [], "data-final-evidence")}
+          </div>
+
           <button type="button" class="primary-action" data-action="submit-final">고발장 제출</button>
         </form>
       </section>
@@ -1391,6 +1518,35 @@
           </div>
         `}
       </article>
+    `;
+  }
+
+  function renderFinalRuleInfo() {
+    const ruleId = state.selectedFinalRule || "R1";
+    const rule = ruleById.get(ruleId);
+    if (!rule) return `<p class="empty-note">추리를 선택해 세부 내용을 확인하세요.</p>`;
+
+    const solved = state.solved.has(ruleId);
+    if (!solved) {
+      return `
+        <div class="rule-info-card is-unsolved">
+          <strong>[${escapeHtml(rule.id)}] ${escapeHtml(rule.title)}</strong>
+          <p class="status-badge">❌ 아직 해결되지 않은 추리입니다.</p>
+          <p class="result-text">추리 보드에서 해당 증거들을 찾아 연결해 보세요.</p>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="rule-info-card is-solved">
+        <strong>[${escapeHtml(rule.id)}] ${escapeHtml(rule.title)}</strong>
+        <p class="status-badge">✓ 확정 완료</p>
+        <p class="result-text">${escapeHtml(rule.result)}</p>
+        <small class="evidence-list">연결된 단서: ${rule.required.map((reqId) => {
+          const card = evidenceById.get(reqId);
+          return `${reqId} · ${card ? card.title : ""}`;
+        }).join(", ")}</small>
+      </div>
     `;
   }
 
@@ -1485,13 +1641,36 @@
       state.interviewEvidence = "";
     }
     if (action === "ask") state.interviewMode = actionEl.dataset.mode;
-    if (action === "present-evidence") state.interviewEvidence = actionEl.dataset.evidence;
+    if (action === "present-evidence") {
+      const id = actionEl.dataset.evidence;
+      state.interviewEvidence = id;
+      if (!state.presented[id]) state.presented[id] = [];
+      if (!state.presented[id].includes(state.activeSuspect)) {
+        state.presented[id].push(state.activeSuspect);
+      }
+    }
+    if (action === "toggle-board-evidence") {
+      const id = actionEl.dataset.evidence;
+      if (state.selected.has(id)) {
+        state.selected.delete(id);
+      } else {
+        state.selected.add(id);
+      }
+      state.boardFeedback = null;
+      render();
+      return;
+    }
     if (action === "clear-selection") {
       state.selected.clear();
       state.boardFeedback = null;
     }
     if (action === "submit-board") {
       submitBoard();
+      return;
+    }
+    if (action === "select-final-rule") {
+      state.selectedFinalRule = actionEl.dataset.rule;
+      render();
       return;
     }
     if (action === "use-hint") {
